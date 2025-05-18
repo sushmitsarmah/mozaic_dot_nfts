@@ -19,7 +19,7 @@ import { GalleryHorizontal } from "lucide-react";
 
 const Gallery = () => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
   const [sortBy, setSortBy] = useState("recent");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8; // Number of NFTs per page
@@ -28,7 +28,7 @@ const Gallery = () => {
   const filteredNFTs = nfts.filter(nft => {
     const matchesSearch = nft.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           nft.creator.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory ? nft.category === selectedCategory : true;
+    const matchesCategory = selectedCategory === "all" ? true : nft.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
   
@@ -100,7 +100,7 @@ const Gallery = () => {
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent className="bg-nft-dark-purple border-nft-purple/30">
-                <SelectItem value="">All Categories</SelectItem>
+                <SelectItem value="all">All Categories</SelectItem>
                 {categories.map((category) => (
                   <SelectItem key={category.id} value={category.slug}>
                     {category.name}
@@ -126,11 +126,11 @@ const Gallery = () => {
         {/* Category Pills */}
         <div className="flex flex-wrap gap-2 mb-8">
           <Button
-            variant={selectedCategory === "" ? "default" : "outline"}
+            variant={selectedCategory === "all" ? "default" : "outline"}
             size="sm"
-            className={selectedCategory === "" ? "bg-nft-purple" : "border-nft-purple/30"}
+            className={selectedCategory === "all" ? "bg-nft-purple" : "border-nft-purple/30"}
             onClick={() => {
-              setSelectedCategory("");
+              setSelectedCategory("all");
               setCurrentPage(1); // Reset to first page when filtering
             }}
           >
@@ -231,7 +231,7 @@ const Gallery = () => {
               className="text-nft-purple mt-2"
               onClick={() => {
                 setSearchQuery("");
-                setSelectedCategory("");
+                setSelectedCategory("all");
                 setCurrentPage(1);
               }}
             >
