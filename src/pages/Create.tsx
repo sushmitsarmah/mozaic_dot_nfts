@@ -10,6 +10,8 @@ import { Loader, Wand2, X, Plus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { MintFormData } from "@/types";
+import CreateNFTCollection from "@/web3/services/collections/create";
+import { useAccountsContext } from "@/web3/lib/wallets/AccountsProvider";
 
 // Mock generated images for prototype
 const mockGeneratedImages = [
@@ -22,6 +24,7 @@ const mockGeneratedImages = [
 const Create = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const accountsContext = useAccountsContext();
   
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -125,7 +128,23 @@ const Create = () => {
   return (
     <div className="py-12 px-4">
       <div className="max-w-5xl mx-auto">
-        <h1 className="text-4xl font-bold mb-8">Create NFT with AI</h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-4xl font-bold">Create NFT with AI</h1>
+          {accountsContext?.activeAccount && (
+            <CreateNFTCollection />
+          )}
+        </div>
+        
+        {!accountsContext?.activeAccount && (
+          <Card className="bg-red-900/20 border-red-500/20 mb-8">
+            <CardContent className="p-6">
+              <h2 className="text-xl font-semibold text-red-400 mb-2">Wallet Not Connected</h2>
+              <p className="text-gray-300">
+                Please connect your Polkadot wallet to create NFTs and collections.
+              </p>
+            </CardContent>
+          </Card>
+        )}
         
         {mintStep === "generate" ? (
           <>
