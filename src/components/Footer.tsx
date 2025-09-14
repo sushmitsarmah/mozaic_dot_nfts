@@ -9,7 +9,7 @@ const Footer = () => {
           <div>
             <Link to="/" className="flex items-center space-x-2 mb-4">
               <span className="font-bold text-2xl text-white">
-                Nexus<span className="text-nft-purple">Art</span>
+                Mozaic<span className="text-nft-purple">Dot</span>
               </span>
             </Link>
             <p className="text-gray-400 max-w-xs">
@@ -46,7 +46,7 @@ const Footer = () => {
         </div>
         
         <div className="border-t border-nft-dark-purple/20 mt-10 pt-6 flex flex-col md:flex-row justify-between items-center">
-          <p className="text-gray-400">© 2025 NexusArt. All rights reserved.</p>
+          <p className="text-gray-400">© 2025 MozaicDot. All rights reserved.</p>
           <div className="flex space-x-6 mt-4 md:mt-0">
             <Link to="/terms" className="text-gray-400 hover:text-white">Terms</Link>
             <Link to="/privacy" className="text-gray-400 hover:text-white">Privacy</Link>

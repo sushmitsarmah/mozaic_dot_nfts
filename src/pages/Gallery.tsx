@@ -14,6 +14,7 @@ import { GalleryHorizontal, RefreshCw } from "lucide-react";
 import { CollectionCard } from "@/components/CollectionCard";
 import { useAccountsContext } from "@/web3/lib/wallets/AccountsProvider";
 import { useSdkContext } from "@/web3/lib/sdk/UniqueSDKProvider";
+import { requestCache, generateCacheKey, CacheTTL } from "@/lib/utils/cache";
 
 const Gallery = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -26,7 +27,7 @@ const Gallery = () => {
   const accountsContext = useAccountsContext();
   const { sdk, currentNetwork } = useSdkContext();
 
-  const fetchCollections = async () => {
+  const fetchCollections = async (forceRefresh = false) => {
     if (!sdk) {
       console.log("SDK not initialized");
       setLoading(false);
@@ -34,12 +35,25 @@ const Gallery = () => {
       return;
     }
 
+    // Check cache first (unless force refresh)
+    const cacheKey = generateCacheKey.collectionList(currentNetwork);
+    if (!forceRefresh) {
+      const cachedCollections = requestCache.get<number[]>(cacheKey);
+      if (cachedCollections) {
+        console.log("📦 Using cached collection list");
+        setCollections(cachedCollections);
+        setLoading(false);
+        return;
+      }
+    }
+
     try {
       setLoading(true);
       setError(null);
       console.log("Fetching collections from AssetHub...", { 
         sdkConnected: !!sdk,
-        baseUrl: import.meta.env.VITE_REST_URL || "not set"
+        network: currentNetwork,
+        cacheKey
       });
       
       // Smart collection discovery - check known collections first, then ranges
@@ -137,7 +151,13 @@ const Gallery = () => {
         }
       }
       console.log(`Scan complete. Found ${foundCollections.length} collections:`, foundCollections);
-      setCollections(foundCollections.sort((a, b) => b - a)); // Sort newest first
+      
+      const sortedCollections = foundCollections.sort((a, b) => b - a); // Sort newest first
+      setCollections(sortedCollections);
+      
+      // Cache the results
+      requestCache.set(cacheKey, sortedCollections, CacheTTL.COLLECTION_LIST);
+      console.log(`💾 Cached ${sortedCollections.length} collections for ${CacheTTL.COLLECTION_LIST/1000}s`);
       
       if (foundCollections.length === 0) {
         const networkName = currentNetwork.includes('kusama') ? 'Kusama AssetHub' :
@@ -204,7 +224,7 @@ const Gallery = () => {
             <Button
               variant="outline"
               size="sm"
-              onClick={fetchCollections}
+              onClick={() => fetchCollections(true)} // Force refresh
               disabled={loading}
               className="border-gray-600 text-gray-300 hover:bg-gray-700"
             >
@@ -230,7 +250,7 @@ const Gallery = () => {
                 <p>• Network: {currentNetwork}</p>
                 <p>• SDK Status: {sdk ? "Connected" : "Not Connected"}</p>
               </div>
-              <Button onClick={fetchCollections} className="mt-4 bg-red-600 hover:bg-red-700">
+              <Button onClick={() => fetchCollections(true)} className="mt-4 bg-red-600 hover:bg-red-700">
                 Retry Connection
               </Button>
             </CardContent>
@@ -297,7 +317,7 @@ const Gallery = () => {
             <div className="mt-6">
               <p className="text-sm text-gray-500 mb-4">Want to create the first collection?</p>
               <div className="flex gap-4 justify-center">
-                <Button onClick={fetchCollections} variant="outline" className="border-gray-600">
+                <Button onClick={() => fetchCollections(true)} variant="outline" className="border-gray-600">
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Scan Again
                 </Button>

@@ -1,3 +1,5 @@
+import { requestCache, generateCacheKey, CacheTTL } from './cache';
+
 /**
  * Convert IPFS URLs to HTTP gateway URLs for browser access
  */
@@ -42,14 +44,21 @@ const IPFS_GATEWAYS = [
 ];
 
 /**
- * Fetch JSON data from IPFS URL with proper error handling and gateway fallback
+ * Fetch JSON data from IPFS URL with proper error handling, caching, and gateway fallback
  */
 export const fetchIpfsJson = async (ipfsUrl: string): Promise<any> => {
   if (!ipfsUrl) {
     throw new Error('IPFS URL is required');
   }
 
-  let lastError: Error | null = null;
+  const cacheKey = generateCacheKey.ipfsMetadata(ipfsUrl);
+  
+  return requestCache.cachedFetch(
+    cacheKey,
+    async () => {
+      console.log('🔍 Fetching IPFS metadata:', ipfsUrl);
+      
+      let lastError: Error | null = null;
   
   // Try each gateway until one works
   for (const gateway of IPFS_GATEWAYS) {
@@ -111,7 +120,10 @@ export const fetchIpfsJson = async (ipfsUrl: string): Promise<any> => {
       // Continue to next gateway
     }
   }
-  
-  // If all gateways failed, throw the last error
-  throw new Error(`Failed to fetch IPFS data from all gateways. Last error: ${lastError?.message}`);
+      
+      // If all gateways failed, throw the last error
+      throw new Error(`Failed to fetch IPFS data from all gateways. Last error: ${lastError?.message}`);
+    },
+    CacheTTL.IPFS_METADATA
+  );
 };
