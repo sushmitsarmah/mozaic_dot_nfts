@@ -5,31 +5,34 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { categories } from "@/data/mockData";
-import { Loader, Wand2, X, Plus } from "lucide-react";
+import { Loader, Wand2, X, Plus, Upload, Image as ImageIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { MintFormData } from "@/types";
 import CreateNFTCollection from "@/web3/services/collections/create";
 import { useAccountsContext } from "@/web3/lib/wallets/AccountsProvider";
+import { useSdkContext } from "@/web3/lib/sdk/UniqueSDKProvider";
+import ImageUploader from "@/web3/services/ipfs/uploadImage";
+import { uploadMetadata } from "@/web3/services/ipfs/pinata";
 
-// Mock generated images for prototype
-const mockGeneratedImages = [
-  "https://images.unsplash.com/photo-1518770660439-4636190af475",
-  "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5",
-  "https://images.unsplash.com/photo-1485827404703-89b55fcc595e",
-  "https://images.unsplash.com/photo-1531297484001-80022131f5a1"
-];
+// Note: In production, this would connect to a real AI image generation service
+// For now, we encourage users to use the upload feature with real images
 
 const Create = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const accountsContext = useAccountsContext();
+  const { sdk } = useSdkContext();
   
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [creationMode, setCreationMode] = useState<"ai" | "upload">("ai");
+  const [uploadedImageHash, setUploadedImageHash] = useState<string>("");
+  const [isMinting, setIsMinting] = useState(false);
   
   const [mintStep, setMintStep] = useState<"generate" | "details">("generate");
   const [mintFormData, setMintFormData] = useState<MintFormData>({
@@ -55,9 +58,15 @@ const Create = () => {
     setGeneratedImages([]);
     
     // Simulate API call with timeout
+    // In a real implementation, this would call an AI image generation service
     setTimeout(() => {
-      setGeneratedImages(mockGeneratedImages);
+      // For demo purposes, show a message instead of mock images
       setIsGenerating(false);
+      toast({
+        title: "AI Generation Demo",
+        description: "AI image generation would connect to a real service like DALL-E, Midjourney, or Stable Diffusion. For now, please use the Upload Image tab to mint real NFTs!",
+        variant: "default"
+      });
     }, 2000);
   };
   
@@ -71,8 +80,29 @@ const Create = () => {
     });
     setMintStep("details");
   };
+
+  const handleSelectUploadedImage = () => {
+    if (!uploadedImageHash) {
+      toast({
+        title: "Error",
+        description: "Please upload an image first",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const imageUrl = `https://gateway.pinata.cloud/ipfs/${uploadedImageHash}`;
+    setSelectedImage(imageUrl);
+    setMintFormData({
+      ...mintFormData,
+      image: imageUrl,
+      title: "Custom NFT",
+      description: "NFT created from uploaded image"
+    });
+    setMintStep("details");
+  };
   
-  const handleMint = () => {
+  const handleMint = async () => {
     // Validate required fields
     if (!mintFormData.title || !mintFormData.category || !mintFormData.image) {
       toast({
@@ -82,23 +112,123 @@ const Create = () => {
       });
       return;
     }
-    
-    // Show loading toast
-    toast({
-      title: "Minting NFT",
-      description: "Please wait while we mint your NFT...",
-    });
-    
-    // Simulate blockchain interaction with timeout
-    setTimeout(() => {
+
+    if (!sdk || !accountsContext?.activeAccount) {
       toast({
-        title: "Success",
-        description: "Your NFT has been minted successfully!",
+        title: "Error",
+        description: "Please connect your wallet first",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsMinting(true);
+    
+    try {
+      // Show loading toast
+      toast({
+        title: "Minting NFT",
+        description: "Please wait while we mint your NFT...",
+      });
+
+      // For uploaded images, we already have the IPFS hash
+      let imageHash = "";
+      if (creationMode === "upload" && uploadedImageHash) {
+        imageHash = uploadedImageHash;
+      } else if (creationMode === "ai") {
+        // For AI images, we need to extract the image URL and convert it
+        // This is a simplified approach - in production you'd want to upload AI images to IPFS too
+        imageHash = mintFormData.image; // For now, use the image URL directly
+      }
+
+      // Create metadata following OpenSea standard
+      const metadata = {
+        name: mintFormData.title,
+        description: mintFormData.description,
+        image: imageHash.startsWith('http') ? mintFormData.image : `ipfs://ipfs/${imageHash}`,
+        attributes: mintFormData.attributes.filter(attr => attr.trait_type && attr.value)
+      };
+
+      // Upload metadata to IPFS
+      const metadataIpfsHash = await uploadMetadata(metadata);
+
+      // For this demo, we'll try to mint to collection ID 1
+      // In production, you'd want to let users choose or create collections
+      const defaultCollectionId = 1;
+      
+      const account = accountsContext.activeAccount;
+      const buildOptions = { signerAddress: account.address };
+      const signerAccount = {
+        signer: {
+          sign: account.signer.sign as any
+        },
+        address: account.address
+      };
+
+      // Try to get collection info first to see if it exists
+      let collectionExists = false;
+      try {
+        await sdk.nftsPallet.collection.get({ collectionId: defaultCollectionId });
+        collectionExists = true;
+      } catch {
+        // Collection doesn't exist
+      }
+
+      if (!collectionExists) {
+        toast({
+          title: "Info",
+          description: "No default collection found. Please create a collection first using the 'Create Collection' button.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Get next available item ID
+      let itemId = 1;
+      try {
+        // Try to get collection details to determine next item ID
+        const collectionInfo = await sdk.nftsPallet.collection.get({ collectionId: defaultCollectionId });
+        itemId = (collectionInfo.items || 0) + 1;
+      } catch {
+        // Use default
+      }
+
+      // Mint the NFT
+      const { result } = await sdk.nftsPallet.item.mint({
+        collectionId: defaultCollectionId,
+        itemId,
+        mintTo: account.address,
+      }, buildOptions, signerAccount);
+
+      console.log(`✅ NFT minted! Item ID: ${result.itemId}`);
+
+      // Set metadata
+      await sdk.nftsPallet.item.setMetadata({
+        collectionId: defaultCollectionId,
+        data: metadataIpfsHash as string,
+        itemId: result.itemId
+      }, buildOptions, signerAccount);
+
+      toast({
+        title: "Success!",
+        description: `Your NFT has been minted successfully! Item ID: ${result.itemId}`,
       });
       
-      // Redirect to gallery
-      navigate("/gallery");
-    }, 2000);
+      // Reset form and redirect
+      setTimeout(() => {
+        navigate("/gallery");
+      }, 2000);
+
+    } catch (error: any) {
+      console.error("Minting error:", error);
+      toast({
+        title: "Minting Failed",
+        description: error.message || "An error occurred while minting your NFT. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsMinting(false);
+    }
   };
   
   const handleAddAttribute = () => {
@@ -129,7 +259,7 @@ const Create = () => {
     <div className="py-12 px-4">
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-4xl font-bold">Create NFT with AI</h1>
+          <h1 className="text-4xl font-bold">Create Your NFT</h1>
           {accountsContext?.activeAccount && (
             <CreateNFTCollection />
           )}
@@ -147,80 +277,139 @@ const Create = () => {
         )}
         
         {mintStep === "generate" ? (
-          <>
-            <Card className="bg-nft-dark-purple/50 border-nft-purple/20 mb-8">
-              <CardContent className="p-6">
-                <h2 className="text-2xl font-semibold mb-4">Generate AI Art</h2>
-                <p className="text-gray-400 mb-6">
-                  Enter a detailed description of what you want to create. Be as specific as possible for best results.
-                </p>
-                
-                <div className="space-y-4">
-                  <Textarea
-                    placeholder="A futuristic cityscape with neon lights, cyberpunk style, detailed, trending on artstation..."
-                    className="min-h-24 bg-nft-dark-purple border-nft-purple/30 focus-visible:ring-nft-purple"
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                  />
+          <Tabs value={creationMode} onValueChange={(value) => setCreationMode(value as "ai" | "upload")} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 bg-nft-dark-purple/50 border-nft-purple/20">
+              <TabsTrigger value="ai" className="data-[state=active]:bg-nft-purple/20">
+                <Wand2 className="w-4 h-4 mr-2" />
+                Generate with AI
+              </TabsTrigger>
+              <TabsTrigger value="upload" className="data-[state=active]:bg-nft-purple/20">
+                <Upload className="w-4 h-4 mr-2" />
+                Upload Image
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="ai" className="mt-6">
+              <Card className="bg-nft-dark-purple/50 border-nft-purple/20 mb-8">
+                <CardContent className="p-6">
+                  <h2 className="text-2xl font-semibold mb-4">Generate AI Art (Demo)</h2>
+                  <p className="text-gray-400 mb-6">
+                    This demonstrates AI image generation functionality. In production, this would connect to services like DALL-E, Midjourney, or Stable Diffusion. Try the "Upload Image" tab to mint real NFTs!
+                  </p>
                   
-                  <Button 
-                    onClick={handleGenerate} 
-                    className="w-full bg-nft-purple hover:bg-nft-purple/90 text-white"
-                    disabled={isGenerating || !prompt.trim()}
-                  >
-                    {isGenerating ? (
-                      <>
-                        <Loader className="w-4 h-4 mr-2 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <Wand2 className="w-4 h-4 mr-2" />
-                        Generate
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-            
-            {isGenerating && (
-              <div className="text-center py-8">
-                <Loader className="w-10 h-10 animate-spin mx-auto mb-4 text-nft-purple" />
-                <p className="text-lg">Creating your masterpiece...</p>
-                <p className="text-gray-400">This may take a few moments</p>
-              </div>
-            )}
-            
-            {generatedImages.length > 0 && (
-              <div className="space-y-6">
-                <h2 className="text-2xl font-semibold">Choose an Image to Mint</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {generatedImages.map((image, index) => (
-                    <div 
-                      key={index} 
-                      className={`relative cursor-pointer overflow-hidden rounded-lg border-2 ${
-                        selectedImage === image ? "border-nft-purple" : "border-transparent"
-                      } transition-all hover:shadow-lg hover:shadow-nft-purple/20`}
-                      onClick={() => handleSelectImage(image)}
+                  <div className="space-y-4">
+                    <Textarea
+                      placeholder="A futuristic cityscape with neon lights, cyberpunk style, detailed, trending on artstation..."
+                      className="min-h-24 bg-nft-dark-purple border-nft-purple/30 focus-visible:ring-nft-purple"
+                      value={prompt}
+                      onChange={(e) => setPrompt(e.target.value)}
+                    />
+                    
+                    <Button 
+                      onClick={handleGenerate} 
+                      className="w-full bg-nft-purple hover:bg-nft-purple/90 text-white"
+                      disabled={isGenerating || !prompt.trim()}
                     >
-                      <img 
-                        src={image} 
-                        alt={`Generated image ${index + 1}`} 
-                        className="w-full h-auto"
-                      />
-                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                        <Button className="bg-nft-purple hover:bg-nft-purple/90 text-white">
-                          Select Image
+                      {isGenerating ? (
+                        <>
+                          <Loader className="w-4 h-4 mr-2 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Wand2 className="w-4 h-4 mr-2" />
+                          Generate
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="upload" className="mt-6">
+              <Card className="bg-nft-dark-purple/50 border-nft-purple/20 mb-8">
+                <CardContent className="p-6">
+                  <h2 className="text-2xl font-semibold mb-4">Upload Your Image</h2>
+                  <p className="text-gray-400 mb-6">
+                    Upload your own artwork to mint as an NFT. Supported formats: JPG, PNG, GIF, SVG.
+                  </p>
+                  
+                  <div className="space-y-4">
+                    <ImageUploader setImageUrl={setUploadedImageHash} />
+                    
+                    {uploadedImageHash && (
+                      <div className="mt-4">
+                        <div className="relative rounded-lg overflow-hidden border-2 border-nft-purple/20">
+                          <img 
+                            src={`https://gateway.pinata.cloud/ipfs/${uploadedImageHash}`} 
+                            alt="Uploaded image" 
+                            className="w-full h-64 object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                            <Button 
+                              className="bg-nft-purple hover:bg-nft-purple/90 text-white"
+                              onClick={handleSelectUploadedImage}
+                            >
+                              <ImageIcon className="w-4 h-4 mr-2" />
+                              Use This Image
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        <Button 
+                          className="w-full mt-4 bg-nft-purple hover:bg-nft-purple/90 text-white"
+                          onClick={handleSelectUploadedImage}
+                        >
+                          <ImageIcon className="w-4 h-4 mr-2" />
+                          Proceed with This Image
                         </Button>
                       </div>
-                    </div>
-                  ))}
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        ) : null}
+        
+        {mintStep === "generate" && creationMode === "ai" && isGenerating && (
+          <div className="text-center py-8">
+            <Loader className="w-10 h-10 animate-spin mx-auto mb-4 text-nft-purple" />
+            <p className="text-lg">Creating your masterpiece...</p>
+            <p className="text-gray-400">This may take a few moments</p>
+          </div>
+        )}
+        
+        {mintStep === "generate" && creationMode === "ai" && generatedImages.length > 0 && (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-semibold">Choose an Image to Mint</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {generatedImages.map((image, index) => (
+                <div 
+                  key={index} 
+                  className={`relative cursor-pointer overflow-hidden rounded-lg border-2 ${
+                    selectedImage === image ? "border-nft-purple" : "border-transparent"
+                  } transition-all hover:shadow-lg hover:shadow-nft-purple/20`}
+                  onClick={() => handleSelectImage(image)}
+                >
+                  <img 
+                    src={image} 
+                    alt={`Generated image ${index + 1}`} 
+                    className="w-full h-auto"
+                  />
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                    <Button className="bg-nft-purple hover:bg-nft-purple/90 text-white">
+                      Select Image
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            )}
-          </>
-        ) : (
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {mintStep === "details" && (
           <div className="space-y-8">
             <Card className="bg-nft-dark-purple/50 border-nft-purple/20">
               <CardContent className="p-6">
@@ -335,9 +524,17 @@ const Create = () => {
             
             <Button 
               onClick={handleMint} 
+              disabled={isMinting}
               className="w-full bg-nft-purple hover:bg-nft-purple/90 text-white py-6 text-lg"
             >
-              Mint NFT
+              {isMinting ? (
+                <>
+                  <Loader className="w-4 h-4 mr-2 animate-spin" />
+                  Minting...
+                </>
+              ) : (
+                'Mint NFT'
+              )}
             </Button>
             
             <p className="text-gray-400 text-center text-sm">

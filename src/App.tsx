@@ -8,8 +8,10 @@ import Navigation from "./components/Navigation";
 import Footer from "./components/Footer";
 import Index from "./pages/Index";
 import Gallery from "./pages/Gallery";
+import MyCollections from "./pages/MyCollections";
 import Create from "./pages/Create";
 import NFTDetail from "./pages/NFTDetail";
+import Collection from "./pages/Collection";
 import NotFound from "./pages/NotFound";
 import { AccountsProvider } from "./web3/lib/wallets/AccountsProvider";
 import { UniqueSDKProvider } from "./web3/lib/sdk/UniqueSDKProvider";
@@ -30,8 +32,10 @@ const App = () => (
                 <Routes>
                   <Route path="/" element={<Index />} />
                   <Route path="/gallery" element={<Gallery />} />
+                  <Route path="/my-collections" element={<MyCollections />} />
                   <Route path="/create" element={<Create />} />
-                  <Route path="/nft/:id" element={<NFTDetail />} />
+                  <Route path="/collection/:collectionId" element={<Collection />} />
+                  <Route path="/nft/:collectionId/:itemId" element={<NFTDetail />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </main>
