@@ -15,7 +15,7 @@ import CreateNFTCollection from "@/web3/services/collections/create";
 import { useAccountsContext } from "@/web3/lib/wallets/AccountsProvider";
 import { useSdkContext } from "@/web3/lib/sdk/UniqueSDKProvider";
 import ImageUploader from "@/web3/services/ipfs/uploadImage";
-import { uploadMetadata } from "@/web3/services/ipfs/pinata";
+import { uploadMetadata, getIpfsUrl } from "@/web3/services/ipfs/pinata";
 
 // Note: In production, this would connect to a real AI image generation service
 // For now, we encourage users to use the upload feature with real images
@@ -91,7 +91,7 @@ const Create = () => {
       return;
     }
     
-    const imageUrl = `https://gateway.pinata.cloud/ipfs/${uploadedImageHash}`;
+    const imageUrl = getIpfsUrl(uploadedImageHash);
     setSelectedImage(imageUrl);
     setMintFormData({
       ...mintFormData,
@@ -131,25 +131,27 @@ const Create = () => {
         description: "Please wait while we mint your NFT...",
       });
 
-      // For uploaded images, we already have the IPFS hash
-      let imageHash = "";
-      if (creationMode === "upload" && uploadedImageHash) {
-        imageHash = uploadedImageHash;
-      } else if (creationMode === "ai") {
-        // For AI images, we need to extract the image URL and convert it
-        // This is a simplified approach - in production you'd want to upload AI images to IPFS too
-        imageHash = mintFormData.image; // For now, use the image URL directly
-      }
-
-      // Create metadata following OpenSea standard
+      // Create metadata following OpenSea/ERC-1155 standard
       const metadata = {
         name: mintFormData.title,
         description: mintFormData.description,
-        image: imageHash.startsWith('http') ? mintFormData.image : `ipfs://ipfs/${imageHash}`,
-        attributes: mintFormData.attributes.filter(attr => attr.trait_type && attr.value)
+        image: creationMode === "upload" && uploadedImageHash ? 
+          getIpfsUrl(uploadedImageHash, false) : // Use ipfs:// format for blockchain storage
+          mintFormData.image, // AI images or other URLs
+        attributes: mintFormData.attributes.filter(attr => attr.trait_type.trim() && attr.value.trim()),
+        external_url: "", // Could be website URL
+        background_color: "", // Optional hex color
+        animation_url: "", // For animated NFTs
       };
 
+      console.log('📝 Metadata to upload:', metadata);
+
       // Upload metadata to IPFS
+      toast({
+        title: "Uploading Metadata",
+        description: "Uploading NFT metadata to IPFS...",
+      });
+      
       const metadataIpfsHash = await uploadMetadata(metadata);
 
       // For this demo, we'll try to mint to collection ID 1
@@ -335,6 +337,12 @@ const Create = () => {
                     Upload your own artwork to mint as an NFT. Supported formats: JPG, PNG, GIF, SVG.
                   </p>
                   
+                  <div className="mb-4 p-3 bg-green-900/20 border border-green-500/20 rounded-lg">
+                    <p className="text-green-400 text-sm">
+                      ✅ <strong>Pinata IPFS Ready:</strong> Your images will be stored on IPFS via Pinata
+                    </p>
+                  </div>
+                  
                   <div className="space-y-4">
                     <ImageUploader setImageUrl={setUploadedImageHash} />
                     
@@ -342,7 +350,7 @@ const Create = () => {
                       <div className="mt-4">
                         <div className="relative rounded-lg overflow-hidden border-2 border-nft-purple/20">
                           <img 
-                            src={`https://gateway.pinata.cloud/ipfs/${uploadedImageHash}`} 
+                            src={getIpfsUrl(uploadedImageHash)} 
                             alt="Uploaded image" 
                             className="w-full h-64 object-cover"
                           />

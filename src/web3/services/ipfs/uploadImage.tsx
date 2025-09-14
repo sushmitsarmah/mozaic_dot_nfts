@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import pinata from '@/web3/services/ipfs/pinata';
+import { uploadImage } from '@/web3/services/ipfs/pinata';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Upload, Loader, CheckCircle } from 'lucide-react';
 
 interface ImageUploaderType {
   setImageUrl: (url: string) => void;
@@ -37,24 +38,66 @@ const ImageUploader = ({ setImageUrl }: ImageUploaderType) => {
     setSuccess(null);
 
     try {
-      const result = await pinata.upload.file(file);
-      setSuccess(`File uploaded successfully: ${result.IpfsHash}`);
-      setImageUrl(`${result.IpfsHash}`);
+      const ipfsHash = await uploadImage(file);
+      setSuccess(`File uploaded successfully to IPFS!`);
+      setImageUrl(ipfsHash);
     } catch (err: any) {
-      setError(`Error uploading file: ${err.message}`);
+      setError(err.message);
     } finally {
       setUploading(false);
     }
   };
 
   return (
-    <div className="space-y-2">
-      <Input type="file" onChange={handleFileChange} className="bg-gray-800 border-gray-600 text-white" />
-      <Button onClick={handleUpload} disabled={uploading} className="bg-nft-purple hover:bg-nft-purple/90">
-        {uploading ? 'Uploading...' : 'Upload'}
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Input 
+          type="file" 
+          onChange={handleFileChange} 
+          accept="image/*"
+          className="bg-gray-800 border-gray-600 text-white file:bg-nft-purple file:border-0 file:text-white file:px-4 file:py-2 file:rounded-md file:mr-4" 
+        />
+        {file && (
+          <p className="text-sm text-gray-400">
+            Selected: {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+          </p>
+        )}
+      </div>
+      
+      <Button 
+        onClick={handleUpload} 
+        disabled={uploading || !file} 
+        className="w-full bg-nft-purple hover:bg-nft-purple/90"
+      >
+        {uploading ? (
+          <>
+            <Loader className="w-4 h-4 mr-2 animate-spin" />
+            Uploading to IPFS...
+          </>
+        ) : success ? (
+          <>
+            <CheckCircle className="w-4 h-4 mr-2" />
+            Uploaded Successfully
+          </>
+        ) : (
+          <>
+            <Upload className="w-4 h-4 mr-2" />
+            Upload to IPFS
+          </>
+        )}
       </Button>
-      {error && <p className="text-red-400 text-sm">{error}</p>}
-      {success && <p className="text-green-400 text-sm">{success}</p>}
+      
+      {error && (
+        <div className="p-3 bg-red-900/20 border border-red-500/20 rounded-lg">
+          <p className="text-red-400 text-sm">❌ {error}</p>
+        </div>
+      )}
+      
+      {success && (
+        <div className="p-3 bg-green-900/20 border border-green-500/20 rounded-lg">
+          <p className="text-green-400 text-sm">✅ {success}</p>
+        </div>
+      )}
     </div>
   );
 };
