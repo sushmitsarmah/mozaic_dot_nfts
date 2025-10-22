@@ -11,16 +11,19 @@ import { useSdkContext } from "@/web3/lib/sdk/UniqueSDKProvider";
 import { useAccountsContext } from "@/web3/lib/wallets/AccountsProvider";
 import { useState } from "react";
 import ImageUploader from "@/web3/services/ipfs/uploadImage"
-import { uploadMetadata } from "@/web3/services/ipfs/pinata"
+import { uploadMetadata, uploadImage } from "@/web3/services/ipfs/pinata"
+import { useToast } from "@/components/ui/use-toast";
 
 const CreateNFTCollection = () => {
     const { sdk } = useSdkContext();
     const accountContext = useAccountsContext();
+    const { toast } = useToast();
     const [maxSupply, setMaxSupply] = useState<number>(10);
     const [name, setName] = useState<string>("");
     const [description, setDescription] = useState<string>("");
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-    const [imageUrl, setImageUrl] = useState<string>("");
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [isCreating, setIsCreating] = useState<boolean>(false);
 
     const handleNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         setName(event.target.value);
@@ -37,42 +40,118 @@ const CreateNFTCollection = () => {
     const createNFTCollection = async (e: any) => {
         e.preventDefault();
 
-        if (!sdk || !accountContext?.activeAccount) return;
+        // Validation
+        if (!name.trim()) {
+            toast({
+                title: "Validation Error",
+                description: "Collection name is required",
+                variant: "destructive"
+            });
+            return;
+        }
 
-        const formParameters = {
-            name,
-            description,
-            image: `ipfs://ipfs/${imageUrl}`,
-            maxSupply
-        };
-        console.log("Form Parameters:", formParameters);
+        if (!imageFile) {
+            toast({
+                title: "Validation Error",
+                description: "Please select an image for the collection",
+                variant: "destructive"
+            });
+            return;
+        }
 
-        const metadataIpfsHash = await uploadMetadata(formParameters);
-        console.log(metadataIpfsHash)
+        if (!sdk || !accountContext?.activeAccount) {
+            toast({
+                title: "Error",
+                description: "Please connect your wallet",
+                variant: "destructive"
+            });
+            return;
+        }
 
-        const account = accountContext?.activeAccount;
-        const buildOptions = { signerAddress: account.address };
-        const signerAccount = {
-            signer: {
-                sign: accountContext.activeAccount.signer.sign as any
-            },
-            address: account.address
-        };
-        const opts = {
-            collectionConfig: { maxSupply }
-        };
-        const collectionResult = await sdk.nftsPallet.collection.create(opts, buildOptions, signerAccount);
+        setIsCreating(true);
 
-        const collectionId = collectionResult.result.collectionId;
-        console.log(`✅ Collection created! Collection ID: ${collectionId}`);
+        try {
+            // Upload image to IPFS first
+            toast({
+                title: "Uploading Image",
+                description: "Uploading collection image to IPFS...",
+            });
 
-        console.log("📝 Setting collection metadata URI...");
-        await sdk.nftsPallet.collection.setMetadata({
-            collectionId,
-            data: metadataIpfsHash as string,
-        }, buildOptions, signerAccount);
-        console.log(`🔗 Collection metadata URI: ${metadataIpfsHash}`);
+            const imageIpfsHash = await uploadImage(imageFile);
+            console.log("Image IPFS Hash:", imageIpfsHash);
 
+            const formParameters = {
+                name,
+                description,
+                image: `ipfs://ipfs/${imageIpfsHash}`,
+                maxSupply
+            };
+            console.log("Form Parameters:", formParameters);
+
+            toast({
+                title: "Uploading Metadata",
+                description: "Uploading collection metadata to IPFS...",
+            });
+
+            const metadataIpfsHash = await uploadMetadata(formParameters);
+            console.log("Metadata IPFS Hash:", metadataIpfsHash);
+
+            const account = accountContext?.activeAccount;
+            const buildOptions = { signerAddress: account.address };
+            const signerAccount = {
+                signer: {
+                    sign: accountContext.activeAccount.signer.sign as any
+                },
+                address: account.address
+            };
+            const opts = {
+                collectionConfig: { maxSupply }
+            };
+
+            toast({
+                title: "Creating Collection",
+                description: "Creating your NFT collection on-chain...",
+            });
+
+            const collectionResult = await sdk.nftsPallet.collection.create(opts, buildOptions, signerAccount);
+
+            const collectionId = collectionResult.result.collectionId;
+            console.log(`✅ Collection created! Collection ID: ${collectionId}`);
+
+            console.log("📝 Setting collection metadata URI...");
+            await sdk.nftsPallet.collection.setMetadata({
+                collectionId,
+                data: metadataIpfsHash as string,
+            }, buildOptions, signerAccount);
+            console.log(`🔗 Collection metadata URI: ${metadataIpfsHash}`);
+
+            toast({
+                title: "Success!",
+                description: `Collection #${collectionId} created successfully! Refresh the page to see it.`,
+            });
+
+            // Reset form and close modal
+            setName("");
+            setDescription("");
+            setImageFile(null);
+            setMaxSupply(10);
+            setIsModalOpen(false);
+
+            // Reload page after delay to show new collection
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+
+        } catch (error: any) {
+            console.error("Failed to create collection:", error);
+            toast({
+                title: "Collection Creation Failed",
+                description: error.message || "Failed to create collection. Please try again.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsCreating(false);
+        }
     };
 
     return (
@@ -105,10 +184,8 @@ const CreateNFTCollection = () => {
                                 onChange={handleDescriptionChange}
                                 className="bg-gray-800 border-gray-600 text-white"
                             />
-                            <Label htmlFor="image" className="text-white">Image URL:</Label>
-                            <ImageUploader setImageUrl={setImageUrl}/>
-                            <input type="hidden" name="image" value={imageUrl}/>
-                            {imageUrl && <img width={100} height={100} src={`https://gateway.pinata.cloud/ipfs/${imageUrl}`} alt="Uploaded Image" /> }
+                            <Label htmlFor="image" className="text-white">Collection Image *</Label>
+                            <ImageUploader setImageFile={setImageFile}/>
 
                             <Label htmlFor="maxSupply" className="text-white">Max Supply:</Label>
                             <Input
@@ -119,7 +196,9 @@ const CreateNFTCollection = () => {
                                 min="1"
                                 className="bg-gray-800 border-gray-600 text-white"
                             />
-                            <Button type="submit" className="bg-nft-purple hover:bg-nft-purple/90 text-white">Create NFT Collection</Button>
+                            <Button type="submit" className="bg-nft-purple hover:bg-nft-purple/90 text-white" disabled={isCreating}>
+                                {isCreating ? "Creating..." : "Create NFT Collection"}
+                            </Button>
                         </form>
                     </div>
                 </DialogContent>

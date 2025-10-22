@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,8 +14,7 @@ import { MintFormData } from "@/types";
 import CreateNFTCollection from "@/web3/services/collections/create";
 import { useAccountsContext } from "@/web3/lib/wallets/AccountsProvider";
 import { useSdkContext } from "@/web3/lib/sdk/UniqueSDKProvider";
-import ImageUploader from "@/web3/services/ipfs/uploadImage";
-import { uploadMetadata, getIpfsUrl } from "@/web3/services/ipfs/pinata";
+import { uploadMetadata, uploadImage, getIpfsUrl } from "@/web3/services/ipfs/pinata";
 
 // Note: In production, this would connect to a real AI image generation service
 // For now, we encourage users to use the upload feature with real images
@@ -31,9 +30,13 @@ const Create = () => {
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [creationMode, setCreationMode] = useState<"ai" | "upload">("upload");
-  const [uploadedImageHash, setUploadedImageHash] = useState<string>("");
+  const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
   const [isMinting, setIsMinting] = useState(false);
-  
+  const [userCollections, setUserCollections] = useState<number[]>([]);
+  const [selectedCollection, setSelectedCollection] = useState<number>(0);
+  const [loadingCollections, setLoadingCollections] = useState(false);
+
   const [mintStep, setMintStep] = useState<"generate" | "details">("generate");
   const [mintFormData, setMintFormData] = useState<MintFormData>({
     title: "",
@@ -43,6 +46,268 @@ const Create = () => {
     image: ""
   });
   
+  // Fetch collections owned by the user
+  const fetchUserCollections = async () => {
+    if (!sdk || !accountsContext?.activeAccount) return;
+
+    setLoadingCollections(true);
+    try {
+      const userAddress = accountsContext.activeAccount.address;
+      const ownedCollections: number[] = [];
+
+      // Check which network we're connected to
+      // Unique Network's own chain has an indexer API
+      // AssetHub chains (Paseo, Polkadot, Kusama) do not have a public indexer API yet
+      const baseUrl = sdk.options.baseUrl.toLowerCase();
+
+      // Detect if this is Unique Network's own chain (not AssetHub)
+      const isUniqueChain = baseUrl.includes('/unique/') ||
+                           baseUrl.includes('/opal/') ||
+                           baseUrl.includes('/quartz/');
+
+      const isAssetHub = baseUrl.includes('asset-hub') ||
+                        baseUrl.includes('assethub');
+
+      // Use indexer API only for Unique's own chains, not for AssetHub
+      const useIndexerAPI = isUniqueChain && !isAssetHub;
+
+      if (useIndexerAPI) {
+        // Use Unique Network's indexer API for Unique Network chain
+        console.log('Fetching collections from Unique Network API...');
+        const response = await fetch(
+          `https://api-unique.uniquescan.io/v2/collections?mode=NFT&ownerIn=${userAddress}&isBurned=false&limit=100`
+        );
+
+        if (!response.ok) {
+          throw new Error(`API request failed: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        console.log('Collections API response:', data);
+
+        if (data.items && Array.isArray(data.items)) {
+          for (const collection of data.items) {
+            if (collection.collectionId) {
+              ownedCollections.push(parseInt(collection.collectionId, 10));
+              console.log(`Found owned collection: #${collection.collectionId}`);
+            }
+          }
+        }
+      } else {
+        // For AssetHub, use Subscan API to find collections created by the user
+        console.log('Fetching collections from AssetHub via Subscan...');
+
+        try {
+          // Determine Subscan API endpoint based on network
+          let subscanApiUrl = '';
+          if (baseUrl.includes('paseo')) {
+            subscanApiUrl = 'https://assethub-paseo.api.subscan.io';
+          } else if (baseUrl.includes('polkadot')) {
+            subscanApiUrl = 'https://assethub-polkadot.api.subscan.io';
+          } else if (baseUrl.includes('kusama')) {
+            subscanApiUrl = 'https://assethub-kusama.api.subscan.io';
+          } else if (baseUrl.includes('westend')) {
+            subscanApiUrl = 'https://assethub-westend.api.subscan.io';
+          } else if (baseUrl.includes('rococo')) {
+            subscanApiUrl = 'https://assethub-rococo.api.subscan.io';
+          }
+
+          const subscanApiKey = import.meta.env.VITE_SUBSCAN_API_KEY;
+
+          if (subscanApiUrl && subscanApiKey) {
+            // Query Subscan for NFT collection creation extrinsics
+            const extrinsicsResponse = await fetch(`${subscanApiUrl}/api/scan/extrinsics`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-API-Key': subscanApiKey,
+              },
+              body: JSON.stringify({
+                page: 0,
+                row: 100,
+                signed: 'all',
+                address: userAddress,
+                call_module: 'nfts',
+                call_module_function: 'create',
+                success: true
+              })
+            });
+
+            if (extrinsicsResponse.ok) {
+              const extrinsicsData = await extrinsicsResponse.json();
+              console.log('Subscan extrinsics response:', extrinsicsData);
+
+              if (extrinsicsData.code === 0 && extrinsicsData.data?.extrinsics) {
+                // For each create extrinsic, get the details to extract collection ID
+                for (const extrinsic of extrinsicsData.data.extrinsics) {
+                  try {
+                    const detailResponse = await fetch(`${subscanApiUrl}/api/scan/extrinsic`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': subscanApiKey,
+                      },
+                      body: JSON.stringify({
+                        hash: extrinsic.extrinsic_hash
+                      })
+                    });
+
+                    if (detailResponse.ok) {
+                      const detailData = await detailResponse.json();
+                      console.log('Extrinsic detail:', detailData);
+
+                      // Extract collection ID from events
+                      // The Created event should have the collection ID
+                      if (detailData.code === 0 && detailData.data?.event) {
+                        for (const event of detailData.data.event) {
+                          if (event.module_id === 'nfts' && event.event_id === 'Created') {
+                            // Collection ID is in the event params
+                            const collectionId = event.params?.[0]?.value || event.params?.find((p: any) => p.type === 'T::CollectionId')?.value;
+                            if (collectionId) {
+                              const id = parseInt(collectionId, 10);
+                              if (!ownedCollections.includes(id)) {
+                                ownedCollections.push(id);
+                                console.log(`Found owned collection: #${id}`);
+                              }
+                            }
+                          }
+                        }
+                      }
+
+                      // Also check params field if collection ID is there
+                      if (detailData.code === 0 && detailData.data?.params) {
+                        const params = detailData.data.params;
+                        if (Array.isArray(params)) {
+                          for (const param of params) {
+                            if (param.name === 'collection' || param.type === 'T::CollectionId') {
+                              const id = parseInt(param.value, 10);
+                              if (!ownedCollections.includes(id) && !isNaN(id)) {
+                                ownedCollections.push(id);
+                                console.log(`Found owned collection from params: #${id}`);
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  } catch (detailError) {
+                    console.error('Error fetching extrinsic detail:', detailError);
+                  }
+                }
+
+                // Update UI with found collections
+                if (ownedCollections.length > 0) {
+                  setUserCollections(ownedCollections);
+                  setSelectedCollection(ownedCollections[0]);
+                  console.log(`Found ${ownedCollections.length} collections via Subscan`);
+                }
+              }
+            }
+          } else {
+            console.log('Subscan API not available, falling back to SDK scanning');
+          }
+
+          // If no collections found via Subscan, fall back to SDK scanning
+          if (ownedCollections.length === 0) {
+            console.log('No collections found via Subscan, scanning using SDK...');
+
+            const batchSize = 50;
+            const maxCollectionId = 500;
+
+            for (let batch = 0; batch < maxCollectionId / batchSize; batch++) {
+              const start = batch * batchSize + 1;
+              const end = Math.min(start + batchSize - 1, maxCollectionId);
+
+              const collectionChecks = [];
+              for (let i = start; i <= end; i++) {
+                collectionChecks.push(
+                  sdk.nftsPallet.collection.get({ collectionId: i })
+                    .then((collection) => {
+                      if (collection.owner === userAddress) {
+                        console.log(`Found owned collection: #${i}`);
+                        return i;
+                      }
+                      return null;
+                    })
+                    .catch(() => null)
+                );
+              }
+
+              const results = await Promise.all(collectionChecks);
+              const found = results.filter((id): id is number => id !== null);
+
+              if (found.length > 0) {
+                ownedCollections.push(...found);
+                // Update UI progressively
+                setUserCollections([...ownedCollections]);
+                if (ownedCollections.length === 1) {
+                  setSelectedCollection(ownedCollections[0]);
+                }
+              }
+            }
+          }
+        } catch (subscanError) {
+          console.error('Subscan API error, falling back to SDK scanning:', subscanError);
+
+          // Fallback: Scan collections using SDK
+          const batchSize = 50;
+          const maxCollectionId = 500;
+
+          for (let batch = 0; batch < maxCollectionId / batchSize; batch++) {
+            const start = batch * batchSize + 1;
+            const end = Math.min(start + batchSize - 1, maxCollectionId);
+
+            const collectionChecks = [];
+            for (let i = start; i <= end; i++) {
+              collectionChecks.push(
+                sdk.nftsPallet.collection.get({ collectionId: i })
+                  .then((collection) => {
+                    if (collection.owner === userAddress) {
+                      console.log(`Found owned collection: #${i}`);
+                      return i;
+                    }
+                    return null;
+                  })
+                  .catch(() => null)
+              );
+            }
+
+            const results = await Promise.all(collectionChecks);
+            const found = results.filter((id): id is number => id !== null);
+
+            if (found.length > 0) {
+              ownedCollections.push(...found);
+              setUserCollections([...ownedCollections]);
+              if (ownedCollections.length === 1) {
+                setSelectedCollection(ownedCollections[0]);
+              }
+            }
+          }
+        }
+      }
+
+      setUserCollections(ownedCollections);
+      if (ownedCollections.length > 0) {
+        setSelectedCollection(ownedCollections[0]);
+      }
+    } catch (error: any) {
+      console.error("Error fetching user collections:", error);
+      toast({
+        title: "Error Loading Collections",
+        description: "Failed to load your collections. Please try refreshing the page.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoadingCollections(false);
+    }
+  };
+
+  useEffect(() => {
+    if (accountsContext?.activeAccount && sdk) {
+      fetchUserCollections();
+    }
+  }, [accountsContext?.activeAccount, sdk]);
+
   const handleGenerate = () => {
     if (!prompt.trim()) {
       toast({
@@ -82,20 +347,19 @@ const Create = () => {
   };
 
   const handleSelectUploadedImage = () => {
-    if (!uploadedImageHash) {
+    if (!uploadedImageFile || !imagePreview) {
       toast({
         title: "Error",
-        description: "Please upload an image first",
+        description: "Please select an image first",
         variant: "destructive"
       });
       return;
     }
-    
-    const imageUrl = getIpfsUrl(uploadedImageHash);
-    setSelectedImage(imageUrl);
+
+    setSelectedImage(imagePreview);
     setMintFormData({
       ...mintFormData,
-      image: imageUrl,
+      image: imagePreview,
       title: "Custom NFT",
       description: "NFT created from uploaded image"
     });
@@ -125,19 +389,23 @@ const Create = () => {
     setIsMinting(true);
     
     try {
-      // Show loading toast
-      toast({
-        title: "Minting NFT",
-        description: "Please wait while we mint your NFT...",
-      });
+      let imageIpfsHash = "";
+
+      // Upload image to IPFS if uploaded from file
+      if (creationMode === "upload" && uploadedImageFile) {
+        toast({
+          title: "Uploading Image",
+          description: "Uploading image to IPFS...",
+        });
+        imageIpfsHash = await uploadImage(uploadedImageFile);
+        console.log('🖼️ Image uploaded to IPFS:', imageIpfsHash);
+      }
 
       // Create metadata following OpenSea/ERC-1155 standard
       const metadata = {
         name: mintFormData.title,
         description: mintFormData.description,
-        image: creationMode === "upload" && uploadedImageHash ? 
-          getIpfsUrl(uploadedImageHash, false) : // Use ipfs:// format for blockchain storage
-          mintFormData.image, // AI images or other URLs
+        image: imageIpfsHash ? `ipfs://ipfs/${imageIpfsHash}` : mintFormData.image,
         attributes: mintFormData.attributes.filter(attr => attr.trait_type.trim() && attr.value.trim()),
         external_url: "", // Could be website URL
         background_color: "", // Optional hex color
@@ -151,12 +419,20 @@ const Create = () => {
         title: "Uploading Metadata",
         description: "Uploading NFT metadata to IPFS...",
       });
-      
+
       const metadataIpfsHash = await uploadMetadata(metadata);
 
-      // For this demo, we'll try to mint to collection ID 1
-      // In production, you'd want to let users choose or create collections
-      const defaultCollectionId = 1;
+      // Check if user has selected a collection
+      if (!selectedCollection || userCollections.length === 0) {
+        toast({
+          title: "No Collection Selected",
+          description: "Please create a collection first using the 'Create Collection' button, then refresh this page.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const collectionId = selectedCollection;
       
       const account = accountsContext.activeAccount;
       const buildOptions = { signerAddress: account.address };
@@ -167,37 +443,23 @@ const Create = () => {
         address: account.address
       };
 
-      // Try to get collection info first to see if it exists
-      let collectionExists = false;
-      try {
-        await sdk.nftsPallet.collection.get({ collectionId: defaultCollectionId });
-        collectionExists = true;
-      } catch {
-        // Collection doesn't exist
-      }
-
-      if (!collectionExists) {
-        toast({
-          title: "Info",
-          description: "No default collection found. Please create a collection first using the 'Create Collection' button.",
-          variant: "destructive"
-        });
-        return;
-      }
-
       // Get next available item ID
       let itemId = 1;
       try {
-        // Try to get collection details to determine next item ID
-        const collectionInfo = await sdk.nftsPallet.collection.get({ collectionId: defaultCollectionId });
+        const collectionInfo = await sdk.nftsPallet.collection.get({ collectionId });
         itemId = (collectionInfo.items || 0) + 1;
       } catch {
         // Use default
       }
 
+      toast({
+        title: "Minting NFT",
+        description: `Minting to collection #${collectionId}...`,
+      });
+
       // Mint the NFT
       const { result } = await sdk.nftsPallet.item.mint({
-        collectionId: defaultCollectionId,
+        collectionId,
         itemId,
         mintTo: account.address,
       }, buildOptions, signerAccount);
@@ -206,7 +468,7 @@ const Create = () => {
 
       // Set metadata
       await sdk.nftsPallet.item.setMetadata({
-        collectionId: defaultCollectionId,
+        collectionId,
         data: metadataIpfsHash as string,
         itemId: result.itemId
       }, buildOptions, signerAccount);
@@ -277,8 +539,41 @@ const Create = () => {
             </CardContent>
           </Card>
         )}
-        
-        {mintStep === "generate" ? (
+
+        {accountsContext?.activeAccount && (loadingCollections || userCollections.length === 0) && (
+          <Card className="bg-yellow-900/20 border-yellow-500/20 mb-8">
+            <CardContent className="p-6">
+              <h2 className="text-xl font-semibold text-yellow-400 mb-3">
+                {loadingCollections ? "Checking Your Collections..." : "Create a Collection First"}
+              </h2>
+              <p className="text-gray-300 mb-4">
+                {loadingCollections
+                  ? "We're checking if you own any collections. If you don't have one yet, you'll need to create it first."
+                  : "Before you can mint NFTs, you need to create a collection. A collection is a container that holds your NFTs (like a folder for your digital assets)."
+                }
+              </p>
+              {loadingCollections && (
+                <div className="flex items-center gap-3 mb-4 text-gray-400">
+                  <Loader className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">Scanning collections...</span>
+                </div>
+              )}
+              {!loadingCollections && (
+                <>
+                  <p className="text-gray-400 text-sm mb-4">
+                    Examples: "My Art Collection", "Photography Series", "Gaming Assets", etc.
+                  </p>
+                  <CreateNFTCollection />
+                  <p className="text-gray-500 text-xs mt-3">
+                    After creating a collection, refresh this page to start minting NFTs.
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {accountsContext?.activeAccount && !loadingCollections && userCollections.length > 0 && mintStep === "generate" ? (
           <Tabs value={creationMode} onValueChange={(value) => setCreationMode(value as "ai" | "upload")} className="w-full">
             <TabsList className="grid w-full grid-cols-2 bg-nft-dark-purple/50 border-nft-purple/20">
               <TabsTrigger value="ai" className="data-[state=active]:bg-nft-purple/20" disabled>
@@ -344,18 +639,45 @@ const Create = () => {
                   </div>
                   
                   <div className="space-y-4">
-                    <ImageUploader setImageUrl={setUploadedImageHash} />
-                    
-                    {uploadedImageHash && (
+                    <Input
+                      type="file"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          const file = e.target.files[0];
+                          if (!file.type.startsWith('image/')) {
+                            toast({
+                              title: "Error",
+                              description: "Please select an image file",
+                              variant: "destructive"
+                            });
+                            return;
+                          }
+                          setUploadedImageFile(file);
+                          // Create preview
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setImagePreview(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      accept="image/*"
+                      className="bg-gray-800 border-gray-600 text-white file:bg-nft-purple file:border-0 file:text-white file:px-4 file:py-2 file:rounded-md file:mr-4 cursor-pointer"
+                    />
+                    <p className="text-xs text-gray-500">
+                      Supported formats: JPG, PNG, GIF, SVG (Max 10MB)
+                    </p>
+
+                    {imagePreview && (
                       <div className="mt-4">
                         <div className="relative rounded-lg overflow-hidden border-2 border-nft-purple/20">
-                          <img 
-                            src={getIpfsUrl(uploadedImageHash)} 
-                            alt="Uploaded image" 
+                          <img
+                            src={imagePreview}
+                            alt="Preview"
                             className="w-full h-64 object-cover"
                           />
                           <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                            <Button 
+                            <Button
                               className="bg-nft-purple hover:bg-nft-purple/90 text-white"
                               onClick={handleSelectUploadedImage}
                             >
@@ -364,8 +686,8 @@ const Create = () => {
                             </Button>
                           </div>
                         </div>
-                        
-                        <Button 
+
+                        <Button
                           className="w-full mt-4 bg-nft-purple hover:bg-nft-purple/90 text-white"
                           onClick={handleSelectUploadedImage}
                         >
@@ -381,15 +703,15 @@ const Create = () => {
           </Tabs>
         ) : null}
         
-        {mintStep === "generate" && creationMode === "ai" && isGenerating && (
+        {accountsContext?.activeAccount && !loadingCollections && userCollections.length > 0 && mintStep === "generate" && creationMode === "ai" && isGenerating && (
           <div className="text-center py-8">
             <Loader className="w-10 h-10 animate-spin mx-auto mb-4 text-nft-purple" />
             <p className="text-lg">Creating your masterpiece...</p>
             <p className="text-gray-400">This may take a few moments</p>
           </div>
         )}
-        
-        {mintStep === "generate" && creationMode === "ai" && generatedImages.length > 0 && (
+
+        {accountsContext?.activeAccount && !loadingCollections && userCollections.length > 0 && mintStep === "generate" && creationMode === "ai" && generatedImages.length > 0 && (
           <div className="space-y-6">
             <h2 className="text-2xl font-semibold">Choose an Image to Mint</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -417,7 +739,7 @@ const Create = () => {
           </div>
         )}
         
-        {mintStep === "details" && (
+        {accountsContext?.activeAccount && !loadingCollections && userCollections.length > 0 && mintStep === "details" && (
           <div className="space-y-8">
             <Card className="bg-nft-dark-purple/50 border-nft-purple/20">
               <CardContent className="p-6">
@@ -444,6 +766,36 @@ const Create = () => {
                 </div>
                 
                 <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Collection *</label>
+                    {loadingCollections ? (
+                      <div className="bg-nft-dark-purple border-nft-purple/30 p-3 rounded-md text-gray-400 text-sm">
+                        Loading your collections...
+                      </div>
+                    ) : userCollections.length === 0 ? (
+                      <div className="bg-red-900/20 border-red-500/20 p-3 rounded-md">
+                        <p className="text-red-400 text-sm mb-2">You don't own any collections yet.</p>
+                        <p className="text-gray-400 text-xs">Click "Create Collection" button at the top to create one first.</p>
+                      </div>
+                    ) : (
+                      <Select
+                        value={selectedCollection.toString()}
+                        onValueChange={(value) => setSelectedCollection(parseInt(value))}
+                      >
+                        <SelectTrigger className="bg-nft-dark-purple border-nft-purple/30">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-nft-dark-purple border-nft-purple/30">
+                          {userCollections.map((colId) => (
+                            <SelectItem key={colId} value={colId.toString()}>
+                              Collection #{colId}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+
                   <div>
                     <label className="block text-sm font-medium mb-1">Title *</label>
                     <Input

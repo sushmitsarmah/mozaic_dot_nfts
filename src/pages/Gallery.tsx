@@ -50,15 +50,15 @@ const Gallery = () => {
     try {
       setLoading(true);
       setError(null);
-      console.log("Fetching collections from AssetHub...", { 
+      console.log("Fetching collections from AssetHub...", {
         sdkConnected: !!sdk,
         network: currentNetwork,
         cacheKey
       });
-      
+
       // Smart collection discovery - check known collections first, then ranges
       const foundCollections: number[] = [];
-      
+
       // Network-specific known collections
       const getKnownCollections = (network: string) => {
         if (network.includes('kusama-asset-hub')) {
@@ -89,13 +89,18 @@ const Gallery = () => {
       const knownCollections = getKnownCollections(currentNetwork);
       
       console.log('Checking known collections first...');
-      
+
+      // Stop loading immediately and show collections as they're found
+      setLoading(false);
+
       // First, quickly check known collections
-      const knownPromises = knownCollections.map(id => 
+      const knownPromises = knownCollections.map(id =>
         sdk.nftsPallet.collection.get({ collectionId: id })
           .then((collection) => {
             console.log(`✅ Confirmed collection ${id}`);
             foundCollections.push(id);
+            // Update UI immediately with each found collection
+            setCollections([...foundCollections].sort((a, b) => b - a));
             return true;
           })
           .catch(() => {
@@ -103,7 +108,7 @@ const Gallery = () => {
             return false;
           })
       );
-      
+
       await Promise.all(knownPromises);
       
       // Then do a limited scan for new collections in promising ranges
@@ -136,32 +141,33 @@ const Gallery = () => {
       for (const range of rangesToCheck) {
         let consecutiveNotFound = 0;
         const maxConsecutiveNotFound = 5; // Stop after 5 consecutive 404s in new ranges
-        
+
         for (let i = range.start; i <= range.end; i++) {
           try {
             const collection = await sdk.nftsPallet.collection.get({ collectionId: i });
             console.log(`🆕 Found new collection ${i}:`, collection);
             foundCollections.push(i);
             consecutiveNotFound = 0;
+            // Update UI immediately with each newly found collection
+            setCollections([...foundCollections].sort((a, b) => b - a));
           } catch (err) {
             consecutiveNotFound++;
-            
+
             // Stop scanning this range if too many consecutive 404s
             if (consecutiveNotFound >= maxConsecutiveNotFound) {
               console.log(`Stopping scan at collection ${i} due to consecutive 404s`);
               break;
             }
           }
-          
+
           // Small delay between individual requests
           await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
       console.log(`Scan complete. Found ${foundCollections.length} collections:`, foundCollections);
-      
+
       const sortedCollections = foundCollections.sort((a, b) => b - a); // Sort newest first
-      setCollections(sortedCollections);
-      
+
       // Cache the results
       requestCache.set(cacheKey, sortedCollections, CacheTTL.COLLECTION_LIST);
       console.log(`💾 Cached ${sortedCollections.length} collections for ${CacheTTL.COLLECTION_LIST/1000}s`);
