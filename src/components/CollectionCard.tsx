@@ -29,9 +29,13 @@ export function CollectionCard({ id }: CollectionCardProps) {
         if (colls.metadata.data.indexOf("collection_metadata.json") === -1) {
           setMetadataLink(colls.metadata?.data)
         }
+      } else {
+        // No metadata link - stop loading and show basic collection info
+        setLoading(false);
       }
     } catch (error) {
       console.error("Failed to fetch collection metadata:", error);
+      setLoading(false); // Stop loading on error
     }
   };
 

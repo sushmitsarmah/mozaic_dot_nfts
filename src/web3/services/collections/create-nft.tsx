@@ -11,8 +11,8 @@ import { useSdkContext } from "@/web3/lib/sdk/UniqueSDKProvider";
 import { useAccountsContext } from "@/web3/lib/wallets/AccountsProvider";
 import ImageUploader from "@/web3/services/ipfs/uploadImage"
 import { useState } from "react";
-import { uploadMetadata } from "@/web3/services/ipfs/pinata"
-import AudioUploader from "../ipfs/uploadAudio";
+import { uploadMetadata, uploadImage } from "@/web3/services/ipfs/pinata"
+import { useToast } from "@/components/ui/use-toast";
 
 interface CreateNFTProps {
     collectionId: number;
@@ -22,10 +22,10 @@ interface CreateNFTProps {
 const CreateNFT = ({ collectionId, items }: CreateNFTProps) => {
     const { sdk } = useSdkContext();
     const accountContext = useAccountsContext();
+    const { toast } = useToast();
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-    const [imageUrl, setImageUrl] = useState<string>("");
-    const [audioUrl, setAudioUrl] = useState<string>("");
-    const [audioDesc, setAudioDesc] = useState<string>("");
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [isCreating, setIsCreating] = useState<boolean>(false);
 
     const [nftData, setNftData] = useState({
         name: '',
@@ -60,58 +60,135 @@ const CreateNFT = ({ collectionId, items }: CreateNFTProps) => {
     };
 
     const createCollectionItem = async () => {
+        // Validation
+        if (!nftData.name.trim()) {
+            toast({
+                title: "Validation Error",
+                description: "NFT name is required",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        if (!imageFile) {
+            toast({
+                title: "Validation Error",
+                description: "Please select an image",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        if (!sdk || !accountContext?.activeAccount) {
+            toast({
+                title: "Error",
+                description: "Please connect your wallet",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        setIsCreating(true);
         setIsModalOpen(false);
 
-        if (!sdk || !accountContext?.activeAccount) return;
+        try {
+            // Upload image to IPFS first
+            toast({
+                title: "Uploading Image",
+                description: "Uploading image to IPFS...",
+            });
 
-        const formParameters = {
-            name: nftData.name,
-            description: nftData.description,
-            image: `ipfs://ipfs/${imageUrl}`,
-            external_url: nftData.external_url,
-            attributes: [
-                ...nftData.attributes,
-                { trait_type: 'audio', value: `ipfs://ipfs/${audioUrl}` },
-                { trait_type: 'audio_description', value: audioDesc }
-            ]
-        };
-        console.log("Form Parameters:", formParameters);
+            const imageIpfsHash = await uploadImage(imageFile);
+            console.log("Image IPFS Hash:", imageIpfsHash);
 
-        const metadataIpfsHash = await uploadMetadata(formParameters);
-        console.log(metadataIpfsHash)
+            // Build metadata with only filled attributes
+            const filteredAttributes = nftData.attributes.filter(
+                attr => attr.trait_type.trim() && attr.value.trim()
+            );
 
-        const account = accountContext?.activeAccount;
+            const formParameters = {
+                name: nftData.name,
+                description: nftData.description,
+                image: `ipfs://ipfs/${imageIpfsHash}`,
+                external_url: nftData.external_url,
+                attributes: filteredAttributes
+            };
+            console.log("Form Parameters:", formParameters);
 
-        const buildOptions = { signerAddress: account.address };
-        const signerAccount = {
-            signer: {
-                sign: accountContext.activeAccount.signer.sign as any
-            },
-            address: account.address
-        };
+            toast({
+                title: "Uploading Metadata",
+                description: "Uploading NFT metadata to IPFS...",
+            });
 
-        console.log(`🚀 Minting a new NFT in collection #${collectionId}...`);
+            const metadataIpfsHash = await uploadMetadata(formParameters);
+            console.log("Metadata IPFS Hash:", metadataIpfsHash);
 
-        const itemId = items + 1;
-        const { result } = await sdk.nftsPallet.item.mint({
-            collectionId,
-            itemId,
-            mintTo: account.address,
-        }, buildOptions, signerAccount);
-        console.log(`✅ NFT minted! Item ID: ${result.itemId}`);
+            const account = accountContext.activeAccount;
+            const buildOptions = { signerAddress: account.address };
+            const signerAccount = {
+                signer: {
+                    sign: account.signer.sign as any
+                },
+                address: account.address
+            };
 
-        console.log("📝 Setting item metadata URI...");
-        await sdk.nftsPallet.item.setMetadata({
-            collectionId,
-            data: metadataIpfsHash as string,
-            itemId: result.itemId
-        }, buildOptions, signerAccount);
-        console.log(`🔗 Item metadata URI: ${metadataIpfsHash}`);
-    };
+            console.log(`🚀 Minting a new NFT in collection #${collectionId}...`);
 
-    const getAudioType = (url: string) => {
-        const extension = url.split('.').pop();
-        return `audio/${extension}`;
+            toast({
+                title: "Minting NFT",
+                description: `Creating NFT in collection #${collectionId}...`,
+            });
+
+            const itemId = items + 1;
+            const { result } = await sdk.nftsPallet.item.mint({
+                collectionId,
+                itemId,
+                mintTo: account.address,
+            }, buildOptions, signerAccount);
+            console.log(`✅ NFT minted! Item ID: ${result.itemId}`);
+
+            toast({
+                title: "Setting Metadata",
+                description: "Attaching metadata to NFT...",
+            });
+
+            console.log("📝 Setting item metadata URI...");
+            await sdk.nftsPallet.item.setMetadata({
+                collectionId,
+                data: metadataIpfsHash as string,
+                itemId: result.itemId
+            }, buildOptions, signerAccount);
+            console.log(`🔗 Item metadata URI: ${metadataIpfsHash}`);
+
+            toast({
+                title: "Success!",
+                description: `NFT #${result.itemId} created successfully in collection #${collectionId}`,
+            });
+
+            // Reset form
+            setNftData({
+                name: '',
+                description: '',
+                external_url: '',
+                attributes: [{ trait_type: '', value: '' }]
+            });
+            setImageFile(null);
+
+            // Reload page after delay to show new NFT
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+
+        } catch (error: any) {
+            console.error("Failed to create NFT:", error);
+            toast({
+                title: "NFT Creation Failed",
+                description: error.message || "Failed to create NFT. Please try again.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsCreating(false);
+        }
     };
 
     return (
@@ -146,12 +223,10 @@ const CreateNFT = ({ collectionId, items }: CreateNFTProps) => {
                                 onChange={handleInputChange}
                                 className="bg-gray-800 border-gray-600 text-white"
                             />
-                            <Label htmlFor="image" className="text-white">Image URL:</Label>
-                            <ImageUploader setImageUrl={setImageUrl} />
-                            <input type="hidden" name="image" value={imageUrl} />
-                            {imageUrl && <img width={100} height={100} src={`https://gateway.pinata.cloud/ipfs/${imageUrl}`} alt="Uploaded Image" />}
+                            <Label htmlFor="image" className="text-white">Image *</Label>
+                            <ImageUploader setImageFile={setImageFile} />
 
-                            <Label htmlFor="external_url" className="text-white">External URL:</Label>
+                            <Label htmlFor="external_url" className="text-white">External URL (optional):</Label>
                             <Input
                                 type="text"
                                 id="external_url"
@@ -159,34 +234,10 @@ const CreateNFT = ({ collectionId, items }: CreateNFTProps) => {
                                 value={nftData.external_url}
                                 onChange={handleInputChange}
                                 className="bg-gray-800 border-gray-600 text-white"
+                                placeholder="https://example.com"
                             />
 
-                            <Label htmlFor="audio" className="text-white">Audio URL:</Label>
-                            <Input
-                                type="text"
-                                id="audio"
-                                name="audio"
-                                value={audioUrl}
-                                onChange={(e) => setAudioUrl(e.target.value)}
-                                className="bg-gray-800 border-gray-600 text-white"
-                            />
-                            <AudioUploader setAudioUrl={setAudioUrl} />
-                            {audioUrl && (
-                                <audio controls>
-                                    <source src={`https://gateway.pinata.cloud/ipfs/${audioUrl}`} type={getAudioType(audioUrl)} />
-                                    Your browser does not support the audio element.
-                                </audio>
-                            )}
-                            <Label htmlFor="audio_description" className="text-white">Audio Description:</Label>
-                            <Input
-                                type="text"
-                                name="audio_description"
-                                value={audioDesc}
-                                onChange={(e) => setAudioDesc(e.target.value)}
-                                className="bg-gray-800 border-gray-600 text-white"
-                            />
-
-                            <Label htmlFor="external_url" className="text-white">Attributes:</Label>
+                            <Label className="text-white">Attributes (optional):</Label>
                             {nftData.attributes.map((attribute, index) => (
                                 <div key={index} className="flex gap-2">
                                     <Input
@@ -207,8 +258,10 @@ const CreateNFT = ({ collectionId, items }: CreateNFTProps) => {
                                     />
                                 </div>
                             ))}
-                            <Button type="button" onClick={addAttribute} className="bg-gray-700 hover:bg-gray-600 text-white">Add Attribute</Button>
-                            <Button type="submit" className="bg-nft-purple hover:bg-nft-purple/90 text-white">Create NFT</Button>
+                            <Button type="button" onClick={addAttribute} className="bg-gray-700 hover:bg-gray-600 text-white" disabled={isCreating}>Add Attribute</Button>
+                            <Button type="submit" className="bg-nft-purple hover:bg-nft-purple/90 text-white" disabled={isCreating}>
+                                {isCreating ? "Creating..." : "Create NFT"}
+                            </Button>
                         </form>
                     </div>
                 </DialogContent>

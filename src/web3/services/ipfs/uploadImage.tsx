@@ -1,101 +1,101 @@
 import React, { useState } from 'react';
-import { uploadImage } from '@/web3/services/ipfs/pinata';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Upload, Loader, CheckCircle } from 'lucide-react';
+import { ImageIcon, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface ImageUploaderType {
-  setImageUrl: (url: string) => void;
+  setImageFile: (file: File | null) => void;
 }
 
-const ImageUploader = ({ setImageUrl }: ImageUploaderType) => {
+const ImageUploader = ({ setImageFile }: ImageUploaderType) => {
   const [file, setFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState<boolean>(false);
+  const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
       const selectedFile = event.target.files[0];
-      if (selectedFile.type.startsWith('image/')) {
-        setFile(selectedFile);
-        setError(null);
-      } else {
-        setError('Please select an image file.');
+
+      // Validate file type
+      if (!selectedFile.type.startsWith('image/')) {
+        setError('Please select an image file (JPG, PNG, GIF, etc.)');
         setFile(null);
+        setPreview(null);
+        setImageFile(null);
+        return;
       }
+
+      // Validate file size (max 10MB)
+      if (selectedFile.size > 10 * 1024 * 1024) {
+        setError('Image must be less than 10MB');
+        setFile(null);
+        setPreview(null);
+        setImageFile(null);
+        return;
+      }
+
+      setFile(selectedFile);
+      setError(null);
+      setImageFile(selectedFile);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreview(reader.result as string);
+      };
+      reader.readAsDataURL(selectedFile);
     }
   };
 
-  const handleUpload = async () => {
-    if (!file) {
-      setError('Please select a file to upload.');
-      return;
-    }
-
-    setUploading(true);
+  const handleRemove = () => {
+    setFile(null);
+    setPreview(null);
     setError(null);
-    setSuccess(null);
-
-    try {
-      const ipfsHash = await uploadImage(file);
-      setSuccess(`File uploaded successfully to IPFS!`);
-      setImageUrl(ipfsHash);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setUploading(false);
-    }
+    setImageFile(null);
   };
 
   return (
     <div className="space-y-4">
-      <div className="space-y-2">
-        <Input 
-          type="file" 
-          onChange={handleFileChange} 
-          accept="image/*"
-          className="bg-gray-800 border-gray-600 text-white file:bg-nft-purple file:border-0 file:text-white file:px-4 file:py-2 file:rounded-md file:mr-4" 
-        />
-        {file && (
-          <p className="text-sm text-gray-400">
-            Selected: {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+      {!preview ? (
+        <div className="space-y-2">
+          <Input
+            type="file"
+            onChange={handleFileChange}
+            accept="image/*"
+            className="bg-gray-800 border-gray-600 text-white file:bg-nft-purple file:border-0 file:text-white file:px-4 file:py-2 file:rounded-md file:mr-4 cursor-pointer"
+          />
+          <p className="text-xs text-gray-500">
+            Supported formats: JPG, PNG, GIF, SVG (Max 10MB)
           </p>
-        )}
-      </div>
-      
-      <Button 
-        onClick={handleUpload} 
-        disabled={uploading || !file} 
-        className="w-full bg-nft-purple hover:bg-nft-purple/90"
-      >
-        {uploading ? (
-          <>
-            <Loader className="w-4 h-4 mr-2 animate-spin" />
-            Uploading to IPFS...
-          </>
-        ) : success ? (
-          <>
-            <CheckCircle className="w-4 h-4 mr-2" />
-            Uploaded Successfully
-          </>
-        ) : (
-          <>
-            <Upload className="w-4 h-4 mr-2" />
-            Upload to IPFS
-          </>
-        )}
-      </Button>
-      
+        </div>
+      ) : (
+        <div className="relative">
+          <img
+            src={preview}
+            alt="Preview"
+            className="w-full h-64 object-cover rounded-lg border-2 border-gray-700"
+          />
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            onClick={handleRemove}
+            className="absolute top-2 right-2"
+          >
+            <X className="w-4 h-4 mr-1" />
+            Remove
+          </Button>
+          {file && (
+            <p className="text-sm text-gray-400 mt-2">
+              {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+            </p>
+          )}
+        </div>
+      )}
+
       {error && (
         <div className="p-3 bg-red-900/20 border border-red-500/20 rounded-lg">
           <p className="text-red-400 text-sm">❌ {error}</p>
-        </div>
-      )}
-      
-      {success && (
-        <div className="p-3 bg-green-900/20 border border-green-500/20 rounded-lg">
-          <p className="text-green-400 text-sm">✅ {success}</p>
         </div>
       )}
     </div>

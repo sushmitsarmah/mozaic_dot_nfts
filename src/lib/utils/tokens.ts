@@ -11,6 +11,9 @@ export const getNetworkTokenInfo = (networkUrl: string) => {
   if (networkUrl.includes('unique')) {
     return { symbol: 'UNQ', decimals: 18 };
   }
+  if (networkUrl.includes('paseo-asset-hub')) {
+    return { symbol: 'PAS', decimals: 10 };
+  }
   if (networkUrl.includes('westend-asset-hub')) {
     return { symbol: 'WND', decimals: 12 };
   }

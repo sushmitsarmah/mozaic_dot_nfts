@@ -50,15 +50,15 @@ const Gallery = () => {
     try {
       setLoading(true);
       setError(null);
-      console.log("Fetching collections from AssetHub...", { 
+      console.log("Fetching collections from AssetHub...", {
         sdkConnected: !!sdk,
         network: currentNetwork,
         cacheKey
       });
-      
+
       // Smart collection discovery - check known collections first, then ranges
       const foundCollections: number[] = [];
-      
+
       // Network-specific known collections
       const getKnownCollections = (network: string) => {
         if (network.includes('kusama-asset-hub')) {
@@ -73,11 +73,15 @@ const Gallery = () => {
           // Unique Network might have collections starting from 1
           return [1, 2, 3, 4, 5];
         }
+        if (network.includes('paseo-asset-hub')) {
+          // Paseo testnet - check basic range
+          return [1, 2, 3];
+        }
         if (network.includes('opal')) {
           // Opal testnet - check basic range
           return [1, 2, 3, 4, 5];
         }
-        
+
         // For testnets and other networks, start with minimal scanning
         return [1, 2, 3];
       };
@@ -85,13 +89,18 @@ const Gallery = () => {
       const knownCollections = getKnownCollections(currentNetwork);
       
       console.log('Checking known collections first...');
-      
+
+      // Stop loading immediately and show collections as they're found
+      setLoading(false);
+
       // First, quickly check known collections
-      const knownPromises = knownCollections.map(id => 
+      const knownPromises = knownCollections.map(id =>
         sdk.nftsPallet.collection.get({ collectionId: id })
           .then((collection) => {
             console.log(`✅ Confirmed collection ${id}`);
             foundCollections.push(id);
+            // Update UI immediately with each found collection
+            setCollections([...foundCollections].sort((a, b) => b - a));
             return true;
           })
           .catch(() => {
@@ -99,7 +108,7 @@ const Gallery = () => {
             return false;
           })
       );
-      
+
       await Promise.all(knownPromises);
       
       // Then do a limited scan for new collections in promising ranges
@@ -114,10 +123,13 @@ const Gallery = () => {
         if (network.includes('unique')) {
           return [{ start: 6, end: 15 }]; // Check a small range first
         }
+        if (network.includes('paseo-asset-hub')) {
+          return [{ start: 4, end: 8 }]; // Minimal scanning for Paseo testnet
+        }
         if (network.includes('opal')) {
           return [{ start: 6, end: 15 }]; // Small range for testnet
         }
-        
+
         // For other networks (testnets), do minimal additional scanning
         return [{ start: 4, end: 8 }];
       };
@@ -129,32 +141,33 @@ const Gallery = () => {
       for (const range of rangesToCheck) {
         let consecutiveNotFound = 0;
         const maxConsecutiveNotFound = 5; // Stop after 5 consecutive 404s in new ranges
-        
+
         for (let i = range.start; i <= range.end; i++) {
           try {
             const collection = await sdk.nftsPallet.collection.get({ collectionId: i });
             console.log(`🆕 Found new collection ${i}:`, collection);
             foundCollections.push(i);
             consecutiveNotFound = 0;
+            // Update UI immediately with each newly found collection
+            setCollections([...foundCollections].sort((a, b) => b - a));
           } catch (err) {
             consecutiveNotFound++;
-            
+
             // Stop scanning this range if too many consecutive 404s
             if (consecutiveNotFound >= maxConsecutiveNotFound) {
               console.log(`Stopping scan at collection ${i} due to consecutive 404s`);
               break;
             }
           }
-          
+
           // Small delay between individual requests
           await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
       console.log(`Scan complete. Found ${foundCollections.length} collections:`, foundCollections);
-      
+
       const sortedCollections = foundCollections.sort((a, b) => b - a); // Sort newest first
-      setCollections(sortedCollections);
-      
+
       // Cache the results
       requestCache.set(cacheKey, sortedCollections, CacheTTL.COLLECTION_LIST);
       console.log(`💾 Cached ${sortedCollections.length} collections for ${CacheTTL.COLLECTION_LIST/1000}s`);
@@ -163,11 +176,12 @@ const Gallery = () => {
         const networkName = currentNetwork.includes('kusama') ? 'Kusama AssetHub' :
                            currentNetwork.includes('polkadot') ? 'Polkadot AssetHub' :
                            currentNetwork.includes('unique') ? 'Unique Network' :
+                           currentNetwork.includes('paseo') ? 'Paseo AssetHub' :
                            currentNetwork.includes('westend') ? 'Westend AssetHub' :
                            currentNetwork.includes('rococo') ? 'Rococo AssetHub' :
                            currentNetwork.includes('opal') ? 'Opal Network' : 'this network';
-        
-        const isTestnet = currentNetwork.includes('westend') || currentNetwork.includes('rococo') || currentNetwork.includes('opal');
+
+        const isTestnet = currentNetwork.includes('paseo') || currentNetwork.includes('westend') || currentNetwork.includes('rococo') || currentNetwork.includes('opal');
         const isMainnet = currentNetwork.includes('kusama-asset-hub') || currentNetwork.includes('polkadot-asset-hub');
         
         let message = `No collections found on ${networkName}.`;
@@ -290,6 +304,7 @@ const Gallery = () => {
               {searchQuery ? "No collections found matching your search." : `No NFT collections found on ${currentNetwork.includes('kusama') ? 'Kusama AssetHub' :
                            currentNetwork.includes('polkadot') ? 'Polkadot AssetHub' :
                            currentNetwork.includes('unique') ? 'Unique Network' :
+                           currentNetwork.includes('paseo') ? 'Paseo AssetHub' :
                            currentNetwork.includes('westend') ? 'Westend AssetHub' :
                            currentNetwork.includes('rococo') ? 'Rococo AssetHub' :
                            currentNetwork.includes('opal') ? 'Opal Network' : 'this network'}`}

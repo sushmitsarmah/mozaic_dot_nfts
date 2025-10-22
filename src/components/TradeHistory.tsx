@@ -57,8 +57,8 @@ export const TradeHistory = ({ collectionId, itemId }: TradeHistoryProps) => {
                         type: 'listed',
                         price: parseInt(priceAmount.toString()),
                         from: item.owner,
-                        timestamp: new Date().toISOString(), // Current timestamp as placeholder
-                        blockNumber: undefined // Would need blockchain query for real block number
+                        // Note: timestamp and blockNumber would require blockchain event querying
+                        // which is not currently available through the SDK's item.get() method
                     });
                 }
                 

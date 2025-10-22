@@ -24,19 +24,22 @@ export function NFTItemCard({ itemId, collectionId }: ItemCardProps) {
         collectionId,
         itemId
       });
-      
+
       if (item.metadata) {
         if (item.metadata.data.indexOf("token_metadata.json") === -1) {
           setMetadataLink(item.metadata?.data);
         }
+      } else {
+        // No metadata link - stop loading and show basic item info
+        setLoading(false);
       }
       setItemExists(true);
     } catch (error: any) {
       console.error("Failed to fetch item metadata:", error);
       if (error.message?.includes('not found') || error.message?.includes('404')) {
         setItemExists(false);
-        setLoading(false);
       }
+      setLoading(false);
     }
   };
 

@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react"
 import { useSdkContext } from "@/web3/lib/sdk/UniqueSDKProvider"
+import { useAccountsContext } from "@/web3/lib/wallets/AccountsProvider"
 import { Card, CardContent } from "@/components/ui/card"
 import TradeNFT from "@/web3/services/collections/nft_trade";
+import EditNFT from "@/web3/services/collections/edit-nft";
+import BurnNFT from "@/web3/services/collections/burn-nft";
+import TransferNFT from "@/web3/services/collections/transfer-nft";
+import ClearMetadata from "@/web3/services/collections/clear-metadata";
+import ApproveTransfer from "@/web3/services/collections/approve-transfer";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { fetchIpfsJson } from "@/lib/utils/ipfs";
@@ -15,10 +21,14 @@ interface NFTDetailViewProps {
 
 export function NFTDetailView({ itemId, collectionId }: NFTDetailViewProps) {
     const { sdk, currentNetwork } = useSdkContext()
+    const accountContext = useAccountsContext()
     const [metadataLink, setMetadataLink] = useState<string>("");
     const [metadata, setMetadata] = useState<any>();
     const [itemData, setItemData] = useState<any>();
     const [loading, setLoading] = useState(true);
+
+    // Check if current user is the owner
+    const isOwner = accountContext?.activeAccount?.address === itemData?.owner;
 
     const fetchItemMetadata = async () => {
         if (!sdk) return;
@@ -102,14 +112,53 @@ export function NFTDetailView({ itemId, collectionId }: NFTDetailViewProps) {
             
             <div className="space-y-6">
                 <div>
-                    <h1 className="text-4xl font-bold text-white mb-2">
-                        {metadata?.name || `NFT #${itemId}`}
-                    </h1>
-                    <div className="flex items-center gap-2 text-gray-400">
+                    <div className="flex items-start justify-between mb-2">
+                        <h1 className="text-4xl font-bold text-white">
+                            {metadata?.name || `NFT #${itemId}`}
+                        </h1>
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-400 mb-4">
                         <span>Collection #{collectionId}</span>
                         <span>•</span>
                         <span>Item #{itemId}</span>
                     </div>
+
+                    {/* Owner Actions */}
+                    {isOwner && (
+                        <Card className="bg-gray-800 border-gray-700 mb-6">
+                            <CardContent className="p-4">
+                                <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">Owner Actions</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    <EditNFT
+                                        collectionId={collectionId}
+                                        itemId={itemId}
+                                        currentMetadata={metadata}
+                                        isOwner={isOwner}
+                                    />
+                                    <TransferNFT
+                                        collectionId={collectionId}
+                                        itemId={itemId}
+                                        isOwner={isOwner}
+                                    />
+                                    <ApproveTransfer
+                                        collectionId={collectionId}
+                                        itemId={itemId}
+                                        isOwner={isOwner}
+                                    />
+                                    <ClearMetadata
+                                        collectionId={collectionId}
+                                        itemId={itemId}
+                                        isOwner={isOwner}
+                                    />
+                                    <BurnNFT
+                                        collectionId={collectionId}
+                                        itemId={itemId}
+                                        isOwner={isOwner}
+                                    />
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
 
                 {metadata?.description && (
