@@ -30,7 +30,7 @@ const Create = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [creationMode, setCreationMode] = useState<"ai" | "upload">("ai");
+  const [creationMode, setCreationMode] = useState<"ai" | "upload">("upload");
   const [uploadedImageHash, setUploadedImageHash] = useState<string>("");
   const [isMinting, setIsMinting] = useState(false);
   
@@ -281,9 +281,9 @@ const Create = () => {
         {mintStep === "generate" ? (
           <Tabs value={creationMode} onValueChange={(value) => setCreationMode(value as "ai" | "upload")} className="w-full">
             <TabsList className="grid w-full grid-cols-2 bg-nft-dark-purple/50 border-nft-purple/20">
-              <TabsTrigger value="ai" className="data-[state=active]:bg-nft-purple/20">
+              <TabsTrigger value="ai" className="data-[state=active]:bg-nft-purple/20" disabled>
                 <Wand2 className="w-4 h-4 mr-2" />
-                Generate with AI
+                Generate with AI (Coming Soon)
               </TabsTrigger>
               <TabsTrigger value="upload" className="data-[state=active]:bg-nft-purple/20">
                 <Upload className="w-4 h-4 mr-2" />

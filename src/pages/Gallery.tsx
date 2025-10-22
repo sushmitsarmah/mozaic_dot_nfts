@@ -73,11 +73,15 @@ const Gallery = () => {
           // Unique Network might have collections starting from 1
           return [1, 2, 3, 4, 5];
         }
+        if (network.includes('paseo-asset-hub')) {
+          // Paseo testnet - check basic range
+          return [1, 2, 3];
+        }
         if (network.includes('opal')) {
           // Opal testnet - check basic range
           return [1, 2, 3, 4, 5];
         }
-        
+
         // For testnets and other networks, start with minimal scanning
         return [1, 2, 3];
       };
@@ -114,10 +118,13 @@ const Gallery = () => {
         if (network.includes('unique')) {
           return [{ start: 6, end: 15 }]; // Check a small range first
         }
+        if (network.includes('paseo-asset-hub')) {
+          return [{ start: 4, end: 8 }]; // Minimal scanning for Paseo testnet
+        }
         if (network.includes('opal')) {
           return [{ start: 6, end: 15 }]; // Small range for testnet
         }
-        
+
         // For other networks (testnets), do minimal additional scanning
         return [{ start: 4, end: 8 }];
       };
@@ -163,11 +170,12 @@ const Gallery = () => {
         const networkName = currentNetwork.includes('kusama') ? 'Kusama AssetHub' :
                            currentNetwork.includes('polkadot') ? 'Polkadot AssetHub' :
                            currentNetwork.includes('unique') ? 'Unique Network' :
+                           currentNetwork.includes('paseo') ? 'Paseo AssetHub' :
                            currentNetwork.includes('westend') ? 'Westend AssetHub' :
                            currentNetwork.includes('rococo') ? 'Rococo AssetHub' :
                            currentNetwork.includes('opal') ? 'Opal Network' : 'this network';
-        
-        const isTestnet = currentNetwork.includes('westend') || currentNetwork.includes('rococo') || currentNetwork.includes('opal');
+
+        const isTestnet = currentNetwork.includes('paseo') || currentNetwork.includes('westend') || currentNetwork.includes('rococo') || currentNetwork.includes('opal');
         const isMainnet = currentNetwork.includes('kusama-asset-hub') || currentNetwork.includes('polkadot-asset-hub');
         
         let message = `No collections found on ${networkName}.`;
@@ -290,6 +298,7 @@ const Gallery = () => {
               {searchQuery ? "No collections found matching your search." : `No NFT collections found on ${currentNetwork.includes('kusama') ? 'Kusama AssetHub' :
                            currentNetwork.includes('polkadot') ? 'Polkadot AssetHub' :
                            currentNetwork.includes('unique') ? 'Unique Network' :
+                           currentNetwork.includes('paseo') ? 'Paseo AssetHub' :
                            currentNetwork.includes('westend') ? 'Westend AssetHub' :
                            currentNetwork.includes('rococo') ? 'Rococo AssetHub' :
                            currentNetwork.includes('opal') ? 'Opal Network' : 'this network'}`}

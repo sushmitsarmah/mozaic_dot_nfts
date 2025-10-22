@@ -33,10 +33,12 @@ export const convertIpfsUrl = (ipfsUrl: string, gateway = 'https://ipfs.io'): st
 
 // List of public IPFS gateways with CORS support (base URLs without /ipfs/)
 // Ordered by reliability and CORS compatibility
+// Note: Custom Pinata gateways are NOT included here because they require authentication
+// and are intended for private use. Use public gateways for fetching content.
 const IPFS_GATEWAYS = [
   'https://dweb.link',            // Protocol Labs - usually reliable with CORS
   'https://ipfs.io',             // Official gateway - good CORS support
-  'https://gateway.pinata.cloud', // Pinata - reliable for metadata
+  'https://gateway.pinata.cloud', // Pinata public gateway - reliable for metadata
   'https://cf-ipfs.com',         // Alternative Cloudflare gateway
   'https://w3s.link',            // Web3.storage gateway
   'https://nftstorage.link',     // NFT.storage gateway - good for NFT metadata

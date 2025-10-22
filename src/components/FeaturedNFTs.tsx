@@ -164,13 +164,18 @@ const FeaturedNFTs = () => {
             <Link to={`/nft/${nft.collectionId}/${nft.itemId}`} key={`${nft.collectionId}-${nft.itemId}`}>
               <Card className="overflow-hidden bg-nft-dark-purple border-none nft-card group transition-all duration-300 hover:shadow-xl hover:shadow-nft-purple/20">
                 <div className="relative">
-                  <img 
-                    src={nft.image} 
+                  <img
+                    src={nft.image}
                     alt={nft.title}
                     className="h-64 w-full object-cover transition-transform duration-300 group-hover:scale-105"
                     onError={(e) => {
-                      // Fallback image if IPFS fails
-                      (e.target as HTMLImageElement).src = "https://via.placeholder.com/400x300/6B46C1/ffffff?text=NFT";
+                      // Remove the broken image and show a gradient background instead
+                      const img = e.target as HTMLImageElement;
+                      img.style.display = 'none';
+                      const parent = img.parentElement;
+                      if (parent) {
+                        parent.classList.add('bg-gradient-to-br', 'from-nft-purple/20', 'to-nft-dark-purple/20');
+                      }
                     }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 nft-card-overlay flex items-end p-4">

@@ -21,7 +21,7 @@ export const UniqueSDKContext = createContext<SdkContextValueType>({
   switchNetwork: () => {},
 });
 
-const defaultNetwork = import.meta.env.VITE_REST_URL || "https://rest.unique.network/v2/kusama-asset-hub";
+const defaultNetwork = import.meta.env.VITE_REST_URL || "https://rest.unique.network/v2/paseo-asset-hub";
 
 export const UniqueSDKProvider = ({ children }: PropsWithChildren) => {
   const [sdk, setSdk] = useState<AssetHubInstance>();

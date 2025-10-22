@@ -10,7 +10,7 @@ export const NETWORKS = [
     url: "https://rest.unique.network/v2/kusama-asset-hub",
     description: "Kusama parachain with existing NFTs",
     isTestnet: false,
-    recommended: true
+    recommended: false
   },
   {
     id: "polkadot-asset-hub",
@@ -25,6 +25,14 @@ export const NETWORKS = [
     url: "https://rest.unique.network/v2/unique",
     description: "Dedicated NFT parachain on Polkadot",
     isTestnet: false
+  },
+  {
+    id: "paseo-asset-hub",
+    name: "Paseo AssetHub",
+    url: "https://rest.unique.network/v2/paseo-asset-hub",
+    description: "Paseo testnet",
+    isTestnet: true,
+    recommended: true
   },
   {
     id: "westend-asset-hub",
