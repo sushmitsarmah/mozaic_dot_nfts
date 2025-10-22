@@ -41,11 +41,21 @@ export function useNFTMetadata({ currentMetadata, isOpen }: UseNFTMetadataProps)
                 ) || [{ trait_type: '', value: '' }]
             });
 
-            // Extract image hash
+            // Extract image hash - handle various IPFS URL formats
             if (currentMetadata.image) {
-                const imageHash = currentMetadata.image
-                    .replace('ipfs://ipfs/', '')
-                    .replace('https://gateway.pinata.cloud/ipfs/', '');
+                let imageHash = currentMetadata.image
+                    .replace(/^ipfs:\/\/ipfs\//, '')
+                    .replace(/^ipfs:\/\//, '')
+                    .replace(/^https?:\/\/[^\/]+\/ipfs\//, ''); // Handles any gateway domain
+
+                // Remove subdomain gateway format (e.g., HASH.ipfs.dweb.link)
+                if (imageHash.includes('.ipfs.')) {
+                    imageHash = imageHash.split('.ipfs.')[0];
+                }
+
+                // Clean up any remaining URL artifacts
+                imageHash = imageHash.split('?')[0].split('#')[0].replace(/\/$/, '');
+
                 setImageUrl(imageHash);
             }
 
@@ -58,9 +68,19 @@ export function useNFTMetadata({ currentMetadata, isOpen }: UseNFTMetadataProps)
             );
 
             if (audioAttr) {
-                const audioHash = audioAttr.value
-                    .replace('ipfs://ipfs/', '')
-                    .replace('https://gateway.pinata.cloud/ipfs/', '');
+                let audioHash = audioAttr.value
+                    .replace(/^ipfs:\/\/ipfs\//, '')
+                    .replace(/^ipfs:\/\//, '')
+                    .replace(/^https?:\/\/[^\/]+\/ipfs\//, ''); // Handles any gateway domain
+
+                // Remove subdomain gateway format
+                if (audioHash.includes('.ipfs.')) {
+                    audioHash = audioHash.split('.ipfs.')[0];
+                }
+
+                // Clean up any remaining URL artifacts
+                audioHash = audioHash.split('?')[0].split('#')[0].replace(/\/$/, '');
+
                 setAudioUrl(audioHash);
             }
 

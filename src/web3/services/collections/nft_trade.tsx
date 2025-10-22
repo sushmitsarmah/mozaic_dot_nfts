@@ -84,7 +84,7 @@ const TradeNFT = ({ collectionId, itemId, itemData, currentNetwork }: TradeNFTPr
                     collectionId: +collectionId,
                     itemId: +itemId,
                     price: parseTokenAmount(price, currentNetwork),
-                    buyer: buyer || null,
+                    buyer: buyer || undefined,
                 }, buildOptions, signerAccount);
                 
                 console.log(result)
@@ -158,6 +158,45 @@ const TradeNFT = ({ collectionId, itemId, itemData, currentNetwork }: TradeNFTPr
                 // Refresh the page to show new ownership
                 setTimeout(() => window.location.reload(), 2000);
             }
+
+            if (tradeType === "delist") {
+                if (!isOwner) {
+                    toast({
+                        title: "Error",
+                        description: "Only the owner can delist this NFT",
+                        variant: "destructive"
+                    });
+                    setLoading(false);
+                    return;
+                }
+
+                if (!isListed) {
+                    toast({
+                        title: "Error",
+                        description: "This NFT is not listed for sale",
+                        variant: "destructive"
+                    });
+                    setLoading(false);
+                    return;
+                }
+
+                const { result } = await sdk.nftsPallet.trade.setPrice({
+                    collectionId: +collectionId,
+                    itemId: +itemId,
+                    price: null,
+                    buyer: undefined,
+                }, buildOptions, signerAccount);
+
+                console.log(result);
+                console.log(`✅ NFT delisted!`);
+
+                toast({
+                    title: "Success",
+                    description: "NFT has been delisted from sale"
+                });
+
+                setTimeout(() => window.location.reload(), 2000);
+            }
         } catch (error: any) {
             console.error(error);
             toast({
@@ -185,28 +224,39 @@ const TradeNFT = ({ collectionId, itemId, itemData, currentNetwork }: TradeNFTPr
                         </div>
                         
                         <div className="space-y-3">
-                            <Input 
-                                type="number" 
-                                placeholder={currentPrice ? `Current: ${formatTokenAmount(currentPrice, currentNetwork)} ${tokenSymbol}` : `Price (in ${tokenSymbol})`} 
+                            <Input
+                                type="number"
+                                placeholder={currentPrice ? `Current: ${formatTokenAmount(currentPrice, currentNetwork)} ${tokenSymbol}` : `Price (in ${tokenSymbol})`}
                                 value={price}
                                 onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
                                 className="bg-gray-700 border-gray-600 text-white"
                                 step="0.0001"
                             />
-                            <Input 
-                                type="text" 
-                                placeholder="Buyer address (optional - restrict to specific buyer)" 
+                            <Input
+                                type="text"
+                                placeholder="Buyer address (optional - restrict to specific buyer)"
                                 value={buyer}
                                 onChange={(e) => setBuyer(e.target.value)}
                                 className="bg-gray-700 border-gray-600 text-white"
                             />
-                            <Button 
-                                className="w-full bg-yellow-600 hover:bg-yellow-700 text-black font-semibold" 
-                                onClick={() => tradeNFT("setPrice")}
-                                disabled={loading || !price}
-                            >
-                                {loading ? "Setting Price..." : isListed ? "Update Price" : "List for Sale"}
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button
+                                    className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-black font-semibold"
+                                    onClick={() => tradeNFT("setPrice")}
+                                    disabled={loading || !price}
+                                >
+                                    {loading ? "Setting Price..." : isListed ? "Update Price" : "List for Sale"}
+                                </Button>
+                                {isListed && (
+                                    <Button
+                                        className="bg-red-600 hover:bg-red-700 text-white font-semibold"
+                                        onClick={() => tradeNFT("delist")}
+                                        disabled={loading}
+                                    >
+                                        Delist
+                                    </Button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}

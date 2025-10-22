@@ -1,29 +1,15 @@
+import { NETWORKS } from '@/components/NetworkSelector';
+
 /**
  * Get token symbol and decimals based on network URL
  */
 export const getNetworkTokenInfo = (networkUrl: string) => {
-  if (networkUrl.includes('kusama-asset-hub')) {
-    return { symbol: 'KSM', decimals: 12 };
+  const network = NETWORKS.find(n => n.url === networkUrl);
+
+  if (network) {
+    return { symbol: network.tokenSymbol, decimals: network.decimals };
   }
-  if (networkUrl.includes('polkadot-asset-hub')) {
-    return { symbol: 'DOT', decimals: 10 };
-  }
-  if (networkUrl.includes('unique')) {
-    return { symbol: 'UNQ', decimals: 18 };
-  }
-  if (networkUrl.includes('paseo-asset-hub')) {
-    return { symbol: 'PAS', decimals: 10 };
-  }
-  if (networkUrl.includes('westend-asset-hub')) {
-    return { symbol: 'WND', decimals: 12 };
-  }
-  if (networkUrl.includes('rococo-asset-hub')) {
-    return { symbol: 'ROC', decimals: 12 };
-  }
-  if (networkUrl.includes('opal')) {
-    return { symbol: 'OPL', decimals: 18 };
-  }
-  
+
   // Default fallback
   return { symbol: 'UNITS', decimals: 12 };
 };

@@ -4,6 +4,7 @@ import { useAccountsContext } from "@/web3/lib/wallets/AccountsProvider"
 import { NFTItemCard } from "@/components/NFTItemCard";
 import { RefreshCw } from "lucide-react";
 import CreateNFT from "@/web3/services/collections/create-nft";
+import EditCollection from "@/web3/services/collections/edit-collection";
 import { Button } from "@/components/ui/button";
 import { fetchIpfsJson } from "@/lib/utils/ipfs";
 
@@ -197,7 +198,16 @@ const CollectionView = ({ id }: CollectionViewProps) => {
                             <RefreshCw size={16} className="mr-2" />
                             Refresh
                         </Button>
-                        {isOwner && <CreateNFT collectionId={+id} items={collection.items} />}
+                        {isOwner && (
+                            <>
+                                <EditCollection
+                                    collectionId={+id}
+                                    currentMetadata={metadata}
+                                    isOwner={isOwner}
+                                />
+                                <CreateNFT collectionId={+id} items={collection.items} />
+                            </>
+                        )}
                     </div>
                 </div>
 
