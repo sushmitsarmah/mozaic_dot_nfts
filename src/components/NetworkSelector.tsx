@@ -10,21 +10,27 @@ export const NETWORKS = [
     url: "https://rest.unique.network/v2/kusama-asset-hub",
     description: "Kusama parachain with existing NFTs",
     isTestnet: false,
-    recommended: false
+    recommended: false,
+    tokenSymbol: "KSM",
+    decimals: 12
   },
   {
     id: "polkadot-asset-hub",
     name: "Polkadot AssetHub",
-    url: "https://rest.unique.network/v2/polkadot-asset-hub", 
+    url: "https://rest.unique.network/v2/polkadot-asset-hub",
     description: "Polkadot mainnet",
-    isTestnet: false
+    isTestnet: false,
+    tokenSymbol: "DOT",
+    decimals: 10
   },
   {
     id: "unique-network",
     name: "Unique Network",
     url: "https://rest.unique.network/v2/unique",
     description: "Dedicated NFT parachain on Polkadot",
-    isTestnet: false
+    isTestnet: false,
+    tokenSymbol: "UNQ",
+    decimals: 18
   },
   {
     id: "paseo-asset-hub",
@@ -32,28 +38,36 @@ export const NETWORKS = [
     url: "https://rest.unique.network/v2/paseo-asset-hub",
     description: "Paseo testnet",
     isTestnet: true,
-    recommended: true
+    recommended: true,
+    tokenSymbol: "PAS",
+    decimals: 10
   },
   {
     id: "westend-asset-hub",
     name: "Westend AssetHub",
     url: "https://rest.unique.network/v2/westend-asset-hub",
     description: "Testnet with existing NFTs",
-    isTestnet: true
+    isTestnet: true,
+    tokenSymbol: "WND",
+    decimals: 12
   },
   {
     id: "rococo-asset-hub",
     name: "Rococo AssetHub",
     url: "https://rest.unique.network/v2/rococo-asset-hub",
     description: "Polkadot testnet",
-    isTestnet: true
+    isTestnet: true,
+    tokenSymbol: "ROC",
+    decimals: 12
   },
   {
     id: "opal-network",
     name: "Opal Network",
     url: "https://rest.unique.network/v2/opal",
     description: "Unique Network testnet",
-    isTestnet: true
+    isTestnet: true,
+    tokenSymbol: "OPL",
+    decimals: 18
   }
 ];
 
