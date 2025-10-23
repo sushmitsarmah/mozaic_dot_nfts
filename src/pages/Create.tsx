@@ -240,7 +240,7 @@ const Create = () => {
                 ownedCollections.push(...found);
                 // Update UI progressively
                 setUserCollections([...ownedCollections]);
-                if (ownedCollections.length === 1) {
+                if (ownedCollections.length > 0) {
                   setSelectedCollection(ownedCollections[0]);
                 }
               }
