@@ -17,7 +17,7 @@ import {
 
 const Navigation = () => {
   const accountsContext = useAccountsContext();
-  const { currentNetwork, switchNetwork } = useSdkContext();
+  const { currentNetworkId, switchNetwork } = useSdkContext();
   const [walletModalOpen, setWalletModalOpen] = useState(false);
 
   const { activeAccount, disconnectWallet } = accountsContext || {};
@@ -57,8 +57,8 @@ const Navigation = () => {
 
         <div className="flex items-center gap-4">
           {/* Network Selector */}
-          <NetworkSelector 
-            currentNetwork={currentNetwork}
+          <NetworkSelector
+            currentNetworkId={currentNetworkId}
             onNetworkChange={switchNetwork}
           />
           

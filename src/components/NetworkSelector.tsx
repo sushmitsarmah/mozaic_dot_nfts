@@ -12,7 +12,8 @@ export const NETWORKS = [
     isTestnet: false,
     recommended: false,
     tokenSymbol: "KSM",
-    decimals: 12
+    decimals: 12,
+    subscanUrl: "https://assethub-kusama.api.subscan.io"
   },
   {
     id: "polkadot-asset-hub",
@@ -21,7 +22,8 @@ export const NETWORKS = [
     description: "Polkadot mainnet",
     isTestnet: false,
     tokenSymbol: "DOT",
-    decimals: 10
+    decimals: 10,
+    subscanUrl: "https://assethub-polkadot.api.subscan.io"
   },
   {
     id: "unique-network",
@@ -30,7 +32,8 @@ export const NETWORKS = [
     description: "Dedicated NFT parachain on Polkadot",
     isTestnet: false,
     tokenSymbol: "UNQ",
-    decimals: 18
+    decimals: 18,
+    subscanUrl: "https://unique.api.subscan.io"
   },
   {
     id: "paseo-asset-hub",
@@ -40,7 +43,8 @@ export const NETWORKS = [
     isTestnet: true,
     recommended: true,
     tokenSymbol: "PAS",
-    decimals: 10
+    decimals: 10,
+    subscanUrl: "https://assethub-paseo.api.subscan.io"
   },
   {
     id: "westend-asset-hub",
@@ -49,7 +53,8 @@ export const NETWORKS = [
     description: "Testnet with existing NFTs",
     isTestnet: true,
     tokenSymbol: "WND",
-    decimals: 12
+    decimals: 12,
+    subscanUrl: "https://assethub-westend.api.subscan.io"
   },
   {
     id: "rococo-asset-hub",
@@ -58,7 +63,8 @@ export const NETWORKS = [
     description: "Polkadot testnet",
     isTestnet: true,
     tokenSymbol: "ROC",
-    decimals: 12
+    decimals: 12,
+    subscanUrl: "https://assethub-rococo.api.subscan.io"
   },
   {
     id: "opal-network",
@@ -67,30 +73,27 @@ export const NETWORKS = [
     description: "Unique Network testnet",
     isTestnet: true,
     tokenSymbol: "OPL",
-    decimals: 18
+    decimals: 18,
+    subscanUrl: "https://opal.api.subscan.io"
   }
 ];
 
 interface NetworkSelectorProps {
-  currentNetwork: string;
-  onNetworkChange: (networkUrl: string) => void;
+  currentNetworkId: string;
+  onNetworkChange: (networkId: string) => void;
 }
 
 export const NetworkSelector: React.FC<NetworkSelectorProps> = ({
-  currentNetwork,
+  currentNetworkId,
   onNetworkChange
 }) => {
-  const getCurrentNetwork = () => {
-    return NETWORKS.find(network => network.url === currentNetwork) || NETWORKS[0];
-  };
-
-  const current = getCurrentNetwork();
+  const current = NETWORKS.find(network => network.id === currentNetworkId) || NETWORKS.find(n => n.recommended)!;
 
   return (
     <div className="flex items-center space-x-2">
       <Globe className="w-4 h-4 text-gray-400" />
       <Select
-        value={currentNetwork}
+        value={currentNetworkId}
         onValueChange={onNetworkChange}
       >
         <SelectTrigger className="min-w-56 w-auto bg-gray-800 border-gray-600 text-white">
@@ -110,7 +113,7 @@ export const NetworkSelector: React.FC<NetworkSelectorProps> = ({
           {NETWORKS.map((network) => (
             <SelectItem
               key={network.id}
-              value={network.url}
+              value={network.id}
               className="text-white hover:bg-gray-700"
             >
               <div className="flex flex-col items-start space-y-1">
