@@ -16,7 +16,7 @@ export type SdkContextValueType = {
   sdk?: AssetHubInstance;
   currentNetworkId: string;
   currentNetwork: string; // URL for backward compatibility
-  switchNetwork: (networkId: string) => void;
+  switchNetwork: (networkId: string) => Promise<void>;
   checkBalance: (address: string) => Promise<bigint | null>;
 };
 
@@ -24,7 +24,7 @@ export const UniqueSDKContext = createContext<SdkContextValueType>({
   sdk: undefined,
   currentNetworkId: "",
   currentNetwork: "",
-  switchNetwork: () => {},
+  switchNetwork: async () => {},
   checkBalance: async () => null,
 });
 
@@ -38,6 +38,7 @@ export const UniqueSDKProvider = ({ children }: PropsWithChildren) => {
     const savedNetworkId = localStorage.getItem(NETWORK_STORAGE_KEY);
     return savedNetworkId || DEFAULT_NETWORK_ID;
   });
+  const [previousNetworkId, setPreviousNetworkId] = useState<string>(currentNetworkId);
   const accountsContext = useAccountsContext();
 
   const checkBalance = useCallback(async (address: string): Promise<bigint | null> => {
@@ -66,18 +67,34 @@ export const UniqueSDKProvider = ({ children }: PropsWithChildren) => {
     });
   }, []);
 
-  const initializeSdk = useCallback(async (networkId: string, shouldCheckBalance: boolean = false) => {
+  const initializeSdk = useCallback(async (networkId: string, shouldCheckBalance: boolean = false): Promise<boolean> => {
     const network = NETWORKS.find(n => n.id === networkId);
     if (!network) {
       console.error("Network not found:", networkId);
-      return;
+      toast({
+        title: "Network Error",
+        description: "Selected network configuration not found.",
+        variant: "destructive",
+      });
+      return false;
     }
 
     console.log("Initializing AssetHub SDK with network:", network.name);
     try {
       const newSdk = AssetHub({ baseUrl: network.url });
+
+      // Test the connection by making a simple query
+      try {
+        // Simple test to verify SDK is working
+        await newSdk.balance.get({ address: "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY" }); // Test address
+      } catch (testError) {
+        console.error("SDK connection test failed:", testError);
+        throw new Error("Failed to connect to network. The network may be unavailable.");
+      }
+
       setSdk(newSdk);
       setCurrentNetworkId(networkId);
+      setPreviousNetworkId(networkId);
       // Save to localStorage
       localStorage.setItem(NETWORK_STORAGE_KEY, networkId);
       console.log("AssetHub SDK initialized successfully");
@@ -100,15 +117,61 @@ export const UniqueSDKProvider = ({ children }: PropsWithChildren) => {
           }
         }, 500);
       }
-    } catch (error) {
+
+      return true;
+    } catch (error: any) {
       console.error("Failed to initialize AssetHub SDK:", error);
+      toast({
+        title: "Network Switch Failed",
+        description: error.message || `Failed to connect to ${network.name}. Please check your connection and try again.`,
+        variant: "destructive",
+      });
+      return false;
     }
   }, [accountsContext?.activeAccount, notifyZeroBalance]);
 
-  const switchNetwork = useCallback((networkId: string) => {
+  const switchNetwork = useCallback(async (networkId: string) => {
     console.log("Switching network to:", networkId);
-    initializeSdk(networkId, true); // Enable balance check on network switch
-  }, [initializeSdk]);
+
+    // Store current network in case we need to revert
+    const previousNetwork = currentNetworkId;
+    const targetNetwork = NETWORKS.find(n => n.id === networkId);
+
+    if (!targetNetwork) {
+      console.error("Target network not found:", networkId);
+      return;
+    }
+
+    // Show loading state briefly
+    toast({
+      title: "Switching Network",
+      description: `Connecting to ${targetNetwork.name}...`,
+    });
+
+    // Try to switch network
+    const success = await initializeSdk(networkId, true); // Enable balance check on network switch
+
+    if (!success) {
+      // Switch failed - revert to previous network
+      console.log("Network switch failed, reverting to:", previousNetwork);
+      setCurrentNetworkId(previousNetwork);
+
+      // Don't show another toast if initializeSdk already showed one
+      const previousNetworkName = NETWORKS.find(n => n.id === previousNetwork)?.name || "previous network";
+      toast({
+        title: "Reverted to Previous Network",
+        description: `Staying on ${previousNetworkName} due to connection failure.`,
+        variant: "default",
+      });
+    } else {
+      // Success - show confirmation
+      toast({
+        title: "Network Switched",
+        description: `Successfully connected to ${targetNetwork.name}.`,
+        variant: "default",
+      });
+    }
+  }, [initializeSdk, currentNetworkId]);
 
   useEffect(() => {
     initializeSdk(currentNetworkId, false); // Don't check balance on initial load
