@@ -46,36 +46,36 @@ export const NETWORKS = [
     decimals: 10,
     subscanUrl: "https://assethub-paseo.api.subscan.io"
   },
-  {
-    id: "westend-asset-hub",
-    name: "Westend AssetHub",
-    url: "https://rest.unique.network/v2/westend-asset-hub",
-    description: "Testnet with existing NFTs",
-    isTestnet: true,
-    tokenSymbol: "WND",
-    decimals: 12,
-    subscanUrl: "https://assethub-westend.api.subscan.io"
-  },
-  {
-    id: "rococo-asset-hub",
-    name: "Rococo AssetHub",
-    url: "https://rest.unique.network/v2/rococo-asset-hub",
-    description: "Polkadot testnet",
-    isTestnet: true,
-    tokenSymbol: "ROC",
-    decimals: 12,
-    subscanUrl: "https://assethub-rococo.api.subscan.io"
-  },
-  {
-    id: "opal-network",
-    name: "Opal Network",
-    url: "https://rest.unique.network/v2/opal",
-    description: "Unique Network testnet",
-    isTestnet: true,
-    tokenSymbol: "OPL",
-    decimals: 18,
-    subscanUrl: "https://opal.api.subscan.io"
-  }
+  // {
+  //   id: "westend-asset-hub",
+  //   name: "Westend AssetHub",
+  //   url: "https://rest.unique.network/v2/westend-asset-hub",
+  //   description: "Testnet with existing NFTs",
+  //   isTestnet: true,
+  //   tokenSymbol: "WND",
+  //   decimals: 12,
+  //   subscanUrl: "https://assethub-westend.api.subscan.io"
+  // },
+  // {
+  //   id: "rococo-asset-hub",
+  //   name: "Rococo AssetHub",
+  //   url: "https://rest.unique.network/v2/rococo-asset-hub",
+  //   description: "Polkadot testnet",
+  //   isTestnet: true,
+  //   tokenSymbol: "ROC",
+  //   decimals: 12,
+  //   subscanUrl: "https://assethub-rococo.api.subscan.io"
+  // },
+  // {
+  //   id: "opal-network",
+  //   name: "Opal Network",
+  //   url: "https://rest.unique.network/v2/opal",
+  //   description: "Unique Network testnet",
+  //   isTestnet: true,
+  //   tokenSymbol: "OPL",
+  //   decimals: 18,
+  //   subscanUrl: "https://opal.api.subscan.io"
+  // }
 ];
 
 interface NetworkSelectorProps {

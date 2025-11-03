@@ -25,7 +25,7 @@ const Gallery = () => {
   const itemsPerPage = 8; // Number of collections per page
   
   const accountsContext = useAccountsContext();
-  const { sdk, currentNetwork } = useSdkContext();
+  const { sdk, currentNetwork, currentNetworkId } = useSdkContext();
 
   const fetchCollections = async (forceRefresh = false) => {
     if (!sdk) {
@@ -50,6 +50,7 @@ const Gallery = () => {
     try {
       setLoading(true);
       setError(null);
+      setCollections([]); // Clear old collections immediately when fetching new ones
       console.log("Fetching collections from AssetHub...", {
         sdkConnected: !!sdk,
         network: currentNetwork,
@@ -203,6 +204,14 @@ const Gallery = () => {
     }
   };
   
+  // Clear collections immediately when network changes
+  useEffect(() => {
+    setCollections([]);
+    setError(null);
+    setCurrentPage(1);
+    setLoading(true);
+  }, [currentNetworkId]);
+
   useEffect(() => {
     fetchCollections();
   }, [sdk, currentNetwork]); // Refetch when network changes

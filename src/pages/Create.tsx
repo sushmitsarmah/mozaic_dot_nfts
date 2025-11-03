@@ -23,7 +23,7 @@ const Create = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const accountsContext = useAccountsContext();
-  const { sdk } = useSdkContext();
+  const { sdk, currentNetworkId } = useSdkContext();
   
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -61,9 +61,9 @@ const Create = () => {
       const baseUrl = sdk.options.baseUrl.toLowerCase();
 
       // Detect if this is Unique Network's own chain (not AssetHub)
-      const isUniqueChain = baseUrl.includes('/unique/') ||
-                           baseUrl.includes('/opal/') ||
-                           baseUrl.includes('/quartz/');
+      const isUniqueChain = baseUrl.includes('/unique/'); //||
+                          //  baseUrl.includes('/opal/') ||
+                          //  baseUrl.includes('/quartz/');
 
       const isAssetHub = baseUrl.includes('asset-hub') ||
                         baseUrl.includes('assethub');
@@ -302,11 +302,17 @@ const Create = () => {
     }
   };
 
+  // Clear collections when network changes
+  useEffect(() => {
+    setUserCollections([]);
+    setSelectedCollection(0);
+  }, [currentNetworkId]);
+
   useEffect(() => {
     if (accountsContext?.activeAccount && sdk) {
       fetchUserCollections();
     }
-  }, [accountsContext?.activeAccount, sdk]);
+  }, [accountsContext?.activeAccount, sdk, currentNetworkId]);
 
   const handleGenerate = () => {
     if (!prompt.trim()) {

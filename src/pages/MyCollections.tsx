@@ -18,7 +18,7 @@ const MyCollections = () => {
   const [error, setError] = useState<string | null>(null);
   
   const accountsContext = useAccountsContext();
-  const { sdk } = useSdkContext();
+  const { sdk, currentNetworkId } = useSdkContext();
 
   const fetchCollections = async () => {
     if (!sdk || !accountsContext?.activeAccount) {
@@ -29,6 +29,7 @@ const MyCollections = () => {
     try {
       setLoading(true);
       setError(null);
+      setCollections(null); // Clear old collections immediately
 
       const accountAddress = accountsContext.activeAccount.address;
       
@@ -44,9 +45,16 @@ const MyCollections = () => {
     }
   };
   
+  // Clear collections immediately when network changes
+  useEffect(() => {
+    setCollections(null);
+    setError(null);
+    setLoading(true);
+  }, [currentNetworkId]);
+
   useEffect(() => {
     fetchCollections();
-  }, [sdk, accountsContext?.activeAccount]);
+  }, [sdk, accountsContext?.activeAccount, currentNetworkId]); // Refetch when network changes
   
   if (!accountsContext?.activeAccount) {
     return (
